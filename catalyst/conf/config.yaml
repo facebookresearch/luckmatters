@@ -1,0 +1,30 @@
+num_iter_per_epoch: 100
+num_epoch: 100
+multi: 10
+batchsize: 8
+N_train: 10000
+N_eval: 10000
+m: 10
+lr: 0.01
+use_sgd: false
+regen_dataset: false
+seed: [1, 32]
+bias: -0.1
+no_bias: false
+normalize: false
+data_std: 1.5
+c: 50
+d: 30
+teacher_strength_decay: 1
+feature_fixed: false
+top_layer_fixed: false
+teacher_scale: 0.1
+student_scale: 0.005
+adv_init: none
+nonlinear: true
+githash: ""
+theory_suggest_train: false
+lr_reduction: 0
+theory_suggest_sigma: 1
+theory_suggest_mean: 1
+

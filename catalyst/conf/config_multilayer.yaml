@@ -1,0 +1,45 @@
+node_multi: 10
+#lr: "{0:0.2,20:0.1,30:0.05}"
+lr: "{0:0.001,5:0.002,10:0.005,30:0.01,70:0.001}"
+data_d: 20
+data_std: 10.0
+num_epoch: 100
+num_trial: 10
+batchsize: 64
+eval_batchsize: 64
+random_dataset_size: 100000
+momentum: 0.0
+weight_decay: 0
+json_output: false
+cross_entropy: false
+seed: 1
+leaky_relu:
+perturb: 
+same_dir: false
+same_sign: false
+normalize: false
+dataset: "gaussian"  # [choice between "cifar", "mnist" or "gaussian"
+no_bias: false
+load_student:
+load_teacher: 
+d_output: 0
+ks: [64,64,64,64]
+bn_affine: false
+bn: false
+no_sep: false
+teacher_bn_affine: false
+teacher_bn: false
+stats_H: false
+stats_w: false
+use_cnn: false
+bn_before_relu: false
+regen_dataset_each_epoch: false
+stats_teacher: false
+stats_student: false
+stats_teacher_h: false
+stats_student_h: false
+teacher_bias_tune: true
+teacher_strength_decay: 0
+student_scale_down: 0.1
+data_dir: /checkpoint/yuandong
+githash: ""
