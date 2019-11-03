@@ -26,6 +26,20 @@ def find_all_params(data, cond):
             all_d.append(d)
     return all_d
 
+def load_stats(folder):
+    filename = os.path.join(folder, "stats.pickle")
+    if os.path.exists(filename):
+        config_filename = os.path.join(folder, "config.yaml")
+        if not os.path.exists(config_filename):
+           config_filename = os.path.exists(os.path.join(folder, ".hydra/config.yaml"))
+        else:
+            return None
+
+        args = yaml.load(open(config_filename, "r"))
+        stats = torch.load(filename)
+        return dict(args=args,stats=stats)
+
+
 def load_data(root):
     data = []
     total = 0
@@ -38,12 +52,10 @@ def load_data(root):
         if prefix == last_prefix:
             continue
 
-        args = yaml.load(open(os.path.join(folder, "config.yaml"), "r"))
-        filename = os.path.join(folder, "stats.pickle")
-        if os.path.exists(filename):
+        stats = load_stats(folder)
+        if stats is not None:
             print(f"{len(data)}: {folder}")
-            stats = torch.load(filename)
-            data.append(dict(args=args,stats=stats))
+            data.append(stats)
             last_prefix = prefix
-            
+
     return data

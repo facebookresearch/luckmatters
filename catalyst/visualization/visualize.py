@@ -179,7 +179,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     data = load_data(args.root)
-    figure_l_shape(data)
-    figure_success_rate(data)
-    figure_loss(data)
-
+    plot_max_corr_alpha(stats, teacher_thres=0.2, student_thres=0.6)

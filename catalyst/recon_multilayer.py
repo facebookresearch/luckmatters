@@ -753,7 +753,7 @@ def main(args):
         for t in range(len(ks)):
             output = concatOutput(eval_loader, args.use_cnn, [teacher])
             estimated_bias = output[0]["post_lins"][t].median(dim=0)[0]
-            teacher.ws_linear[t].bias.data[:] -= estimated_bias 
+            teacher.ws_linear[t].bias.data[:] -= estimated_bias.cuda() 
           
         # double check
         output = concatOutput(eval_loader, args.use_cnn, [teacher])

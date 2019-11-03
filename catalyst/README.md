@@ -10,6 +10,8 @@ Install Pytorch and other packages (yaml, json, matplotlib).
 
 # Usage
 
+## Two-layer
+
 For two-layer results, you can run the following command to sweep 72 jobs and use them to draw figures. 
 
 ```
@@ -22,3 +24,17 @@ python ./visualization/visualize.py [you sweep folder]
 ```
 
 It will save three figures in the current folder.
+
+## Multi-layer
+
+Use the following command: 
+```
+python recon_multilayer.py seed=2351 stats_teacher_h=true stats_student_h=true num_trial=1 num_epoch=100 random_dataset_size=200000
+```
+
+Once it is done, run the following visualiztion code:
+```
+python ./visualization/visualize_multi.py [your saved folder]
+```
+
+

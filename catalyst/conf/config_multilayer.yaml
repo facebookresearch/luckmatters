@@ -1,13 +1,13 @@
 node_multi: 10
-#lr: "{0:0.2,20:0.1,30:0.05}"
-lr: "{0:0.001,5:0.002,10:0.005,30:0.01,70:0.001}"
+lr: "{0:0.2,20:0.1,30:0.05}"
+#lr: "{0:0.001,5:0.002,10:0.005,30:0.01,70:0.001}"
 data_d: 20
 data_std: 10.0
 num_epoch: 100
 num_trial: 10
 batchsize: 64
 eval_batchsize: 64
-random_dataset_size: 100000
+random_dataset_size: 2000000
 momentum: 0.0
 weight_decay: 0
 json_output: false
@@ -23,7 +23,7 @@ no_bias: false
 load_student:
 load_teacher: 
 d_output: 0
-ks: [64,64,64,64]
+ks: [50,75,100,125]
 bn_affine: false
 bn: false
 no_sep: false
