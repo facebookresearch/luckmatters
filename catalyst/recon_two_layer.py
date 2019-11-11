@@ -58,14 +58,12 @@ def init(cfg):
 
     log.info(f"d = {d}, m = {m}, n = {n}, c = {c}")
 
-    choices = [-1.0, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1.0]
-
     W1_t = torch.randn(d + 1, m).cuda() * cfg.teacher_scale
-    W1_t[:-1, :] = torch.from_numpy(init_separate_w(m, d, choices)).t()
+    W1_t[:-1, :] = torch.from_numpy(init_separate_w(m, d, cfg.choices)).t()
     W1_t[-1, :] = cfg.bias
 
     W2_t = torch.randn(m + 1, c).cuda() * cfg.teacher_scale
-    W2_t[:-1, :] = torch.from_numpy(init_separate_w(c, m, choices)).t()
+    W2_t[:-1, :] = torch.from_numpy(init_separate_w(c, m, cfg.choices)).t()
 
     if cfg.teacher_strength_decay > 0:
         for i in range(1, m):
