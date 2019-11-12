@@ -148,12 +148,12 @@ def compute_Hs(net1, output1, net2, output2):
         W2 = net2.from_bottom_aug_w(j)
 
         # [bs, input_dim_net1, input_dim_net2]
-        beta = torch.cuda.FloatTensor(bs, W1t.size(0), W2.size(1))
+        beta = torch.FloatTensor(bs, W1t.size(0), W2.size(1))
         for i in range(bs):
-            beta[i, :, :] = W1t @ H[i, :, :] @ W2
+            beta[i, :, :] = (W1t @ H[i, :, :].cuda() @ W2).cpu()
         # H_new = torch.bmm(torch.bmm(W1, H), W2)
 
-        betas.append(beta.mean(0).cpu())
+        betas.append(beta.mean(0))
 
         H = beta.clone()
         gate2 = (pre_bn2 > 0).float()
@@ -161,7 +161,7 @@ def compute_Hs(net1, output1, net2, output2):
 
         gate1 = (pre_bn1 > 0).float()
         H[:, :-1, :] *= gate1[:, :, None]
-        Hs.append(H.mean(0).cpu())
+        Hs.append(H.mean(0))
         j -= 1
 
     return Hs[::-1], betas[::-1]
