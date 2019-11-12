@@ -29,7 +29,7 @@ It will save three figures in the current folder.
 
 Use the following command: 
 ```
-python recon_multilayer.py seed=2351 stats_teacher_h=true stats_student_h=true num_trial=1 num_epoch=100 random_dataset_size=200000
+python recon_multilayer.py seed=2351 stats_H=true num_trial=1 num_epoch=100 random_dataset_size=200000
 ```
 
 Once it is done, run the following visualiztion code:

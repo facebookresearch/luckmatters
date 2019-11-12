@@ -3,9 +3,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
-def plot_multilayer_l_shape(stats, epochs):
+def plot_multilayer_l_shape(stats, epoch_split=5):
     s = stats[0][-1]
     num_layer = len(s["train_corrs"])
+
+    total_epoch = len(stats[0]) - 1
+    epochs = [ int(i * total_epoch / (epoch_split - 1)) for i in range(epoch_split) ]
     
     plt.figure(figsize=(20, 10))
     count = 0
@@ -50,5 +53,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     stats = load_stats(args.root)
-    plot_multilayer_l_shape(stats, [0, 5, 10, 15, 20])
+    plot_multilayer_l_shape(stats)
 
