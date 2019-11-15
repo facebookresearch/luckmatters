@@ -647,6 +647,14 @@ def main(args):
 
     d, d_output, train_dataset, eval_dataset = init_dataset(args)
 
+    if args.total_bp_iters > 0 and isinstance(train_dataset, RandomDataset):
+        args.num_epoch = args.total_bp_iters / args.random_dataset_size
+        if args.num_epoch != int(args.num_epoch):
+            raise RuntimeError(f"random_dataset_size [{args.random_dataset_size}] cannot devide total_bp_iters [{args.total_bp_iters}]")
+
+        args.num_epoch = int(args.num_epoch)
+        log.info(f"#Epoch is now set to {args.num_epoch}")
+
     # ks = [5, 6, 7, 8]
     # ks = [10, 15, 20, 25]
     # ks = [50, 75, 100, 125]
@@ -780,6 +788,7 @@ def main(args):
     # pickle.dump(model2numpy(teacher), open("weights_gt.pickle", "wb"), protocol=2)
 
     all_stats = []
+    end_stats = []
     for i in range(args.num_trial):
         if args.load_student is None:
             log.info("=== Trial %d, std = %f ===" % (i, std))
@@ -805,8 +814,11 @@ def main(args):
 
         stats = optimize(train_loader, eval_loader, teacher, student, loss_func, active_nodes, args, lrs)
         all_stats.append(stats)
+        # Only store starting and end stats.
+        end_stats.append([ stats[0], stats[-1] ])
 
     torch.save(all_stats, "stats.pickle")
+    torch.save(end_stats, "summary.pth")
 
     # log.info("Student network")
     # log.info(student.w1.weight)
