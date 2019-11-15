@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
-def plot_multilayer_l_shape(stats, epoch_split=5):
+def plot_multilayer_l_shape(stats, epoch_split=5, save_file=None):
     s = stats[0][-1]
     num_layer = len(s["train_corrs"])
 
@@ -43,15 +43,17 @@ def plot_multilayer_l_shape(stats, epoch_split=5):
             if layer == 3:
                 plt.title(f"Epoch {it}")
         # plt.legend()
-            
-    plt.savefig(f"multilayer_l_shape.pdf")
+
+    if save_file is not None:
+        plt.savefig(save_file)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('root', type=str, help="root directory")
+    parser.add_argument("--save_file", type=str, default="multilayer_l_shape.pdf")
 
     args = parser.parse_args()
 
     stats = load_stats(args.root)
-    plot_multilayer_l_shape(stats)
+    plot_multilayer_l_shape(stats, save_file=args.save_file)
 
