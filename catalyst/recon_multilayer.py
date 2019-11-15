@@ -457,7 +457,7 @@ def eval_models(iter_num, loader, teacher, student, loss_func, args, init_corrs,
     log.info(f"[{iter_num}] {get_corrs(result, active_nodes=active_nodes, first_n=5)}")
 
     accuracy = 0.0
-    if args.dataset != "gaussian":
+    if not isinstance(args.dataset, RandomDataset):
         accuracy = full_eval_cls(loader, student, args)
     
     # log.info("[%d] Err: %f. std: t=%.3f/s=%.3f, active_ratio: %s" % (iter_num, err.data.item(), t_std, s_std, ratio_str))

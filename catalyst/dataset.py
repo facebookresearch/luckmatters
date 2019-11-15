@@ -5,15 +5,22 @@ from torchvision import transforms
 from torch.utils.data.dataset import Dataset
 
 class RandomDataset(Dataset):
-    def __init__(self, N, d, std):
+    def __init__(self, N, d, std, noise_type="gaussian"):
         super(RandomDataset, self).__init__()
         self.d = d
         self.std = std
         self.N = N
+        self.noise_type = noise_type
         self.regenerate()
 
     def regenerate(self):
-        self.x = torch.FloatTensor(self.N, *self.d).normal_(0, std=self.std) 
+        self.x = torch.FloatTensor(self.N, *self.d)
+        if self.noise_type == "gaussian":
+            self.x.normal_(0, std=self.std) 
+        elif self.noise_type == "uniform":
+            self.x.uniform_(-self.std / 2, self.std / 2)
+        else:
+            raise NotImplementedError(f"Unknown noise type: {self.noise_type}")
 
     def __getitem__(self, idx):
         return self.x[idx], -1
@@ -39,14 +46,14 @@ def init_dataset(args):
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
 
-    if args.dataset == "gaussian":
+    if args.dataset == "gaussian" or args.dataset == "uniform":
         if args.use_cnn:
             d = (1, 16, 16)
         else:
             d = (args.data_d,)
         d_output = 100
-        train_dataset = RandomDataset(args.random_dataset_size, d, args.data_std)
-        eval_dataset = RandomDataset(10240, d, args.data_std)
+        train_dataset = RandomDataset(args.random_dataset_size, d, args.data_std, noise_type=args.dataset)
+        eval_dataset = RandomDataset(10240, d, args.data_std, noise_type=args.dataset)
 
     elif args.dataset == "mnist":
         train_dataset = datasets.MNIST(
