@@ -48,3 +48,4 @@ teacher_strength_decay: 0
 student_scale_down: 0.1
 data_dir: /checkpoint/yuandong
 githash: ""
+num_epoch_save_summary: 10

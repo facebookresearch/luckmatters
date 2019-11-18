@@ -592,6 +592,11 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, active_node
         if args.regen_dataset_each_epoch:
             train_loader.dataset.regenerate()
 
+        if args.num_epoch_save_summary > 0 and i % args.num_epoch_save_summary == 0:
+            # Only store starting and end stats.
+            end_stats = [ stats[0], stats[-1] ]
+            torch.save(end_stats, f"summary.pth")
+
     log.info("After optimization: ")
     _, final_corrs, _, _ = getCorrs(eval_loader, teacher, student, args)
 
@@ -599,6 +604,10 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, active_node
     if args.json_output:
         log.info("json_output: " + json.dumps(result))
     log.info(get_corrs(result, active_nodes=active_nodes, first_n=5))
+
+    # Save the summary at the end.
+    end_stats = [ stats[0], stats[-1] ]
+    torch.save(end_stats, f"summary.pth")
 
     return stats
 
@@ -788,7 +797,6 @@ def main(args):
     # pickle.dump(model2numpy(teacher), open("weights_gt.pickle", "wb"), protocol=2)
 
     all_stats = []
-    end_stats = []
     for i in range(args.num_trial):
         if args.load_student is None:
             log.info("=== Trial %d, std = %f ===" % (i, std))
@@ -814,11 +822,8 @@ def main(args):
 
         stats = optimize(train_loader, eval_loader, teacher, student, loss_func, active_nodes, args, lrs)
         all_stats.append(stats)
-        # Only store starting and end stats.
-        end_stats.append([ stats[0], stats[-1] ])
 
     torch.save(all_stats, "stats.pickle")
-    torch.save(end_stats, "summary.pth")
 
     # log.info("Student network")
     # log.info(student.w1.weight)
