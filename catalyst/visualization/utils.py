@@ -39,7 +39,7 @@ def load_stats(folder, stats_filename="stats.pickle"):
         print(f"Config file: {config_filename}, stats file: {stats_filename}")
         args = yaml.load(open(config_filename, "r"))
         stats = torch.load(filename)
-        return dict(args=args,stats=stats)
+        return dict(args=args,stats=stats,path=folder)
     else:
         print(f"The {filename} doesn't exist")
         return None
