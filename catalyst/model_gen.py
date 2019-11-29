@@ -52,7 +52,7 @@ def normalize_layer(layer):
         if layer.bias is not None:
             layer.bias.data[i] /= norm
 
-def init_w(layer, use_sep=True):
+def init_w(layer, use_sep=True, weight_choices=[-0.5, -0.25, 0, 0.25, 0.5]):
     sz = layer.weight.size()
     output_d = sz[0]
     input_d = 1
@@ -60,8 +60,7 @@ def init_w(layer, use_sep=True):
         input_d *= s
 
     if use_sep:
-        choices = [-0.5, -0.25, 0, 0.25, 0.5]
-        layer.weight.data[:] = torch.from_numpy(init_separate_w(output_d, input_d, choices)).view(*sz).cuda()
+        layer.weight.data[:] = torch.from_numpy(init_separate_w(output_d, input_d, weight_choices)).view(*sz).cuda()
         if layer.bias is not None:
             layer.bias.data.uniform_(-.5, 0.5)
 
@@ -168,10 +167,10 @@ class Model(nn.Module):
         y = self.final_w(hs[-1])
         return dict(hs=hs, post_lins=post_lins, pre_bns=pre_bns, y=y)
 
-    def init_w(self, use_sep=True):
+    def init_w(self, use_sep=True, weight_choices=None):
         for w in self.ws_linear:
-            init_w(w, use_sep=use_sep)
-        init_w(self.final_w, use_sep=use_sep)
+            init_w(w, use_sep=use_sep, weight_choices=weight_choices)
+        init_w(self.final_w, use_sep=use_sep, weight_choices=weight_choices)
 
     def reset_parameters(self):
         for w in self.ws_linear:
@@ -265,10 +264,10 @@ class ModelConv(nn.Module):
         y = self.final_w(h)
         return dict(hs=hs, y=y)
 
-    def init_w(self, use_sep=True):
+    def init_w(self, use_sep=True, weight_choices=None):
         for w in self.ws_linear:
-            init_w(w, use_sep=use_sep)
-        init_w(self.final_w, use_sep=use_sep)
+            init_w(w, use_sep=use_sep, weight_choices=weight_choices)
+        init_w(self.final_w, use_sep=use_sep, weight_choices=weight_choices)
 
     def normalize(self):
         for w in self.ws_linear:

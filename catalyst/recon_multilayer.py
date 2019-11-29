@@ -47,6 +47,19 @@ def mem2str(num_bytes):
         result = "%d bytes" % num_bytes
     return result
 
+def get_grad_norms(model):
+    weight_norms = []
+    bias_norms = []
+
+    for w in model.ws_linear:
+        weight_norms.append(w.weight.grad.norm().item())
+        bias_norms.append(w.bias.grad.norm().item())
+
+    weight_norms.append(model.final_w.weight.grad.norm().item())
+    bias_norms.append(model.final_w.bias.grad.norm().item())
+
+    return weight_norms, bias_norms
+
 def get_mem_usage():
     import psutil
 
@@ -512,7 +525,13 @@ def get_active_nodes(teacher):
     return active_nodes
 
 def optimize(train_loader, eval_loader, teacher, student, loss_func, active_nodes, args, lrs):
-    optimizer = optim.SGD(student.parameters(), lr = lrs[0], momentum=args.momentum, weight_decay=args.weight_decay)
+    if args.optim_method == "sgd":
+        optimizer = optim.SGD(student.parameters(), lr = lrs[0], momentum=args.momentum, weight_decay=args.weight_decay)
+    elif args.optim_method == "adam":
+        optimizer = optim.Adam(student.parameters(), lr = lrs[0], weight_decay=args.weight_decay)
+    else:
+        raise RuntimeError(f"Unknown optim method: {args.optim_method}")
+
     # optimizer = optim.SGD(student.parameters(), lr = 1e-2, momentum=0.9)
     # optimizer = optim.Adam(student.parameters(), lr = 0.0001)
 
@@ -533,7 +552,7 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, active_node
     def add_prefix(prefix, d):
         return { prefix + k : v for k, v in d.items() }
 
-    def get_stats(i):
+    def get_stats(i, weight_grad_norms=None, bias_grad_norms=None):
         teacher.eval()
         student.eval()
         
@@ -546,6 +565,12 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, active_node
         eval_stats = add_prefix("eval_", eval_res)
 
         train_stats.update(eval_stats)
+
+        if args.stats_grad_norm and weight_grad_norms is not None and bias_grad_norms is not None:
+            train_stats["weight_grad_norms"] = weight_grad_norms
+            train_stats["bias_grad_norms"] = bias_grad_norms
+            log.info(f"[{i}] Weight Grad Norm: {weight_grad_norms}")
+            log.info(f"[{i}] Bias Grad Norm: {bias_grad_norms}")
 
         filename = os.path.join(os.getcwd(), f"student-{i}.pt")
         torch.save(student, filename)
@@ -570,7 +595,8 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, active_node
                 param_group['lr'] = lr
         # sample data from Gaussian distribution.
         # xsel = Variable(X.gather(0, sel))
-        for x, y in train_loader:
+        weight_grad_norms, bias_grad_norms = None, None
+        for batch_idx, (x, y) in enumerate(train_loader):
             optimizer.zero_grad()
             if not args.use_cnn:
                 x = x.view(x.size(0), -1)
@@ -584,11 +610,15 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, active_node
                 log.info("NAN appears, optimization aborted")
                 return stats
             err.backward()
+
+            if args.stats_grad_norm and batch_idx == 0:
+                weight_grad_norms, bias_grad_norms = get_grad_norms(student)
+
             optimizer.step()
             if args.normalize:
                 student.normalize()
 
-        stats.append(get_stats(i))
+        stats.append(get_stats(i, weight_grad_norms, bias_grad_norms))
         if args.regen_dataset_each_epoch:
             train_loader.dataset.regenerate()
 
@@ -716,8 +746,8 @@ def main(args):
             active_ks = ks
         
     else:
-        log.info("Init teacher..`")
-        teacher.init_w(use_sep = not args.no_sep)
+        log.info("Init teacher..")
+        teacher.init_w(use_sep = not args.no_sep, weight_choices=list(args.weight_choices))
         if args.teacher_strength_decay > 0: 
             # Prioritize teacher node.
             teacher.prioritize(args.teacher_strength_decay)
@@ -755,7 +785,7 @@ def main(args):
         loss = nn.CrossEntropyLoss().cuda()
         def loss_func(y, target):
             values, indices = target.max(1)
-            err = loss(y, indices)
+            err = loss(y, indices.detach())
             return err
     else:
         loss = nn.MSELoss().cuda()

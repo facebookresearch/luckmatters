@@ -7,25 +7,34 @@ def get_stat(w):
         w = np.array(w)
     elif isinstance(w, torch.Tensor):
         w = w.cpu().numpy()
-    return f"len: {w.shape}, min/max: {np.min(w):#3f}/{np.max(w):#3f}, mean: {np.mean(w):#3f}" 
+    return f"len: {w.shape}, min/max: {np.min(w):#.3f}/{np.max(w):#.3f}, mean: {np.mean(w):#.3f}" 
 
-def get_corrs(corrs, active_nodes=None, first_n=5, details=False):
+def get_corrs(corrs, active_nodes=None, first_n=5, cnt_thres=0.9, details=False):
     summary = ""
     for k, corr_per_layer in enumerate(corrs):
         score = []
+        cnts = []
         for kk, corr_per_node in enumerate(corr_per_layer):
-            if active_nodes is None or kk in active_nodes[k]:
-                # Get best score for each teacher
-                if isinstance(corr_per_node, list):
-                    s = corr_per_node[0]["score"]
-                else:
-                    s = corr_per_node["s_score"][0] 
-                score.append(s)
+            if active_nodes is not None and kk not in active_nodes[k]:
+                continue
 
-        summary += f"L{k}: {get_stat(score)}, "
+            # Get best score for each teacher
+            if isinstance(corr_per_node, list):
+                s = [ c["score"] for c in corr_per_node ]
+            else:
+                s = corr_per_node["s_score"]
+            score.append(s[0])
+            if cnt_thres is not None:
+                cnt = sum([ ss >= cnt_thres for ss in s ])
+                cnts.append(cnt)
+
+        summary += f"L{k}: {get_stat(score)}"
+        if cnt_thres is not None:
+            summary += f", MatchCnt[>={cnt_thres}]: {get_stat(cnts)}"
+        summary += "\n"
 
     output = ""
-    output += f"Corrs Summary: {summary}"
+    output += f"Corrs Summary:\n{summary}"
 
     if details:
         output += "\n"
