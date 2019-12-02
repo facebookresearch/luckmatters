@@ -98,6 +98,8 @@ class Model(nn.Module):
 
         self.sizes.append(d_output)
 
+        self.use_cnn = False
+
     def init_orth(self):
         for w in self.ws:
             set_orth(w)
@@ -200,6 +202,9 @@ class Model(nn.Module):
         else:
             raise RuntimeError("j[%d] is out of bound! should be [0, %d]" % (j, len(self.ws)))
 
+    def num_hidden_layers(self):
+        return len(self.ws_linear)
+
     def num_layers(self):
         return len(self.ws_linear) + 1
 
@@ -230,6 +235,8 @@ class ModelConv(nn.Module):
 
         self.final_w = nn.Linear(last_k * h * w, d_output)
         self.relu = nn.ReLU() if leaky_relu is None else nn.LeakyReLU(leaky_relu)
+
+        self.use_cnn = True
 
     def scale(self, r):
         def _scale(w):
@@ -291,6 +298,9 @@ class ModelConv(nn.Module):
             return self.final_w.weight.data
         else:
             raise RuntimeError("j[%d] is out of bound! should be [0, %d]" % (j, len(self.ws)))
+
+    def num_hidden_layers(self):
+        return len(self.ws_linear)
 
     def num_layers(self):
         return len(self.ws_linear) + 1
