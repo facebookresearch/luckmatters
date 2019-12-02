@@ -337,13 +337,15 @@ def main(args):
         loss_func = nn.MSELoss().cuda()
 
     # Duplicate training and testing. 
-    test_stats_op = deepcopy(stats_op)
+    eval_stats_op = deepcopy(stats_op)
+    stats_op.label = "train"
+    eval_stats_op.label = "eval"
 
     stats_op.add_stat(stats_operator.StatsGrad)
     stats_op.add_stat(stats_operator.StatsMemory)
 
     if args.stats_H:
-        test_stats_op.add_stat(stats_operator.StatsHs)
+        eval_stats_op.add_stat(stats_operator.StatsHs)
 
     # pickle.dump(model2numpy(teacher), open("weights_gt.pickle", "wb"), protocol=2)
 
@@ -371,7 +373,7 @@ def main(args):
         # import pdb
         # pdb.set_trace()
 
-        stats = optimize(train_loader, eval_loader, teacher, student, loss_func, stats_op, test_stats_op, args, lrs)
+        stats = optimize(train_loader, eval_loader, teacher, student, loss_func, stats_op, eval_stats_op, args, lrs)
         all_stats.append(stats)
 
     torch.save(all_stats, "stats.pickle")
