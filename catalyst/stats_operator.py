@@ -5,6 +5,7 @@ import torch.nn as nn
 import utils
 import utils_corrs 
 import pprint
+from collections import Counter
 
 def accumulate(a, v):
     return a + v if a is not None else v
@@ -307,6 +308,9 @@ class StatsCELoss(StatsBase):
         self.sum_loss_teacher = 0.0
         self.sum_topn_teacher = torch.FloatTensor(self.top_n).fill_(0)
         self.n = 0
+        self.n_class = 0
+        self.class_counts_teacher = Counter()
+        self.class_counts_label = Counter()
 
         self.label_valid = True
         self.sum_loss_label = 0.0
@@ -332,31 +336,50 @@ class StatsCELoss(StatsBase):
         self.sum_loss_teacher += err.item()
         self.sum_topn_teacher += self._get_topn(predicted_prob, teacher_y)
 
+        self.class_counts_teacher.update(teacher_y.tolist())
+
         if (y < 0).sum() == 0:
             err = self.loss(predicted_prob, y)
             self.sum_loss_label += err.item()
             self.sum_topn_label += self._get_topn(predicted_prob, y)
+            self.class_counts_label.update(y.tolist())
         else:
             self.label_valid = False
 
         self.n += o_s["y"].size(0)
+        self.n_class = o_s["y"].size(1)
 
         return 1
 
     def _export(self):
+        class_distri_teacher = self.class_counts_teacher.most_common()
         results = {
             "n": self.n,
+            "n_class": self.n_class,
             "ce_loss_teacher" : self.sum_loss_teacher / self.count, 
             f"top{self.top_n}_teacher": self.sum_topn_teacher / self.count,
+            "class_count_distri_teacher": class_distri_teacher 
         }
 
         if self.label_valid:
+            class_distri_label = self.class_counts_label.most_common()
             results.update({
                 "ce_loss_label" : self.sum_loss_label / self.count, 
-                f"top{self.top_n}_label": self.sum_topn_label / self.count
+                f"top{self.top_n}_label": self.sum_topn_label / self.count,
+                "class_count_distri_label": class_distri_label
             })
 
         return results
+
+    def prompt(self):
+        dicts_print = dict()
+        for k, v in self.results.items():
+            if k.startswith("class_count_distri") and len(v) > 6:
+                dicts_print[k] = f"Most common: {v[:3]}, most rare: {v[-3:]}"
+            else:
+                dicts_print[k] = v
+
+        return pprint.pformat(dicts_print, indent=4)
 
 
 class StatsMemory(StatsBase):
