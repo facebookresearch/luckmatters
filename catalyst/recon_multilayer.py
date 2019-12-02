@@ -170,6 +170,20 @@ def set_all_seeds(rand_seed):
     torch.manual_seed(rand_seed)
     torch.cuda.manual_seed(rand_seed)
 
+def parse_lr(lr_str):
+    if lr_str.startswith("{"):
+        lrs = eval(lr_str)
+    else:
+        items = lr_str.split("-")
+        lrs = {}
+        if len(items) == 1:
+            # Fixed learning rate.
+            lrs[0] = float(items[0])
+        else:
+            for k, v in zip(items[::2], items[1::2]):
+                lrs[int(k)] = float(v)
+
+    return lrs
 
 @hydra.main(config_path='conf/config_multilayer.yaml', strict=True)
 def main(args):
@@ -179,9 +193,7 @@ def main(args):
     set_all_seeds(args.seed)
 
     ks = args.ks
-    lrs = eval(args.lr)
-    if not isinstance(lrs, dict):
-        lrs = { 0: lrs }
+    lrs = parse_lr(args.lr)
 
     if args.perturb is not None or args.same_dir or args.same_sign:
         args.node_multi = 1
@@ -206,6 +218,7 @@ def main(args):
     # ks = [50, 75, 100, 125]
     log.info(args.pretty())
     log.info(f"ks: {ks}")
+    log.info(f"lr: {lrs}")
 
     if args.d_output > 0:
         d_output = args.d_output 
