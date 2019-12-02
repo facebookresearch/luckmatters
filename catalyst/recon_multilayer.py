@@ -330,7 +330,7 @@ def main(args):
     stats_op.add_stat(stats_operator.StatsMemory)
 
     if args.stats_H:
-        test_stats_op.add_stat(stats_operator.StatsHs, sub_label="st")
+        test_stats_op.add_stat(stats_operator.StatsHs)
 
     # pickle.dump(model2numpy(teacher), open("weights_gt.pickle", "wb"), protocol=2)
 

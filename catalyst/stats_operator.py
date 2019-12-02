@@ -103,62 +103,88 @@ class StatsHs(StatsBase):
     def __init__(self, teacher, student, label=""):
         super().__init__(teacher, student, label)
 
-    def _add(self, o_t, o_s, y):
+    @staticmethod
+    def _compute_Hs(net1, output1, net2, output2):
         # Compute H given the current banch.
-        sz_t = self.teacher.sizes
-        sz_s = self.student.sizes
+        sz1 = net1.sizes
+        sz2 = net2.sizes
         
-        bs = o_t["hs"][0].size(0)
+        bs = output1["hs"][0].size(0)
         
-        assert sz_t[-1] == sz_s[-1], \
-                f"the output size of teacher/student network should be the same: teacher {sz_t[-1]} vs student {sz_s[-1]}"
+        assert sz1[-1] == sz2[-1], "the output size of both network should be the same: %d vs %d" % (sz1[-1], sz2[-1])
 
-        H = torch.cuda.FloatTensor(bs, sz_s[-1] + 1, sz_t[-1] + 1)
+        H = torch.cuda.FloatTensor(bs, sz1[-1] + 1, sz2[-1] + 1)
         for i in range(bs):
-            H[i,:,:] = torch.eye(sz_t[-1] + 1).cuda()
+            H[i,:,:] = torch.eye(sz1[-1] + 1).cuda()
+
+        Hs = []
+        betas = []
 
         # Then we try computing the other rels recursively.
-        j = len(o_t["hs"])
-        pre_bns_t = o_t["pre_bns"][::-1]
-        pre_bns_s = o_s["pre_bns"][::-1]
+        j = len(output1["hs"])
+        pre_bns1 = output1["pre_bns"][::-1]
+        pre_bns2 = output2["pre_bns"][::-1]
 
-        if len(self.Hs) == 0:
-            self.Hs = [None] * len(pre_bns_t)
-            self.betas = [None] * len(pre_bns_t)
-
-        for pre_bn_t, pre_bn_s in zip(pre_bns_t, pre_bns_s):
+        for pre_bn1, pre_bn2 in zip(pre_bns1, pre_bns2):
             # W: of size [output, input]
-            Ws_t = self.student.from_bottom_aug_w(j).t()
-            Wt = self.teacher.from_bottom_aug_w(j)
+            W1t = net1.from_bottom_aug_w(j).t()
+            W2 = net2.from_bottom_aug_w(j)
 
             # [bs, input_dim_net1, input_dim_net2]
-            beta = torch.cuda.FloatTensor(bs, Ws_t.size(0), Wt.size(1))
+            beta = torch.cuda.FloatTensor(bs, W1t.size(0), W2.size(1))
             for i in range(bs):
-                beta[i, :, :] = Ws_t @ H[i, :, :] @ Wt
+                beta[i, :, :] = W1t @ H[i, :, :] @ W2
             # H_new = torch.bmm(torch.bmm(W1, H), W2)
 
-            self.betas[j - 1] = accumulate(self.betas[j - 1], beta.mean(0))
+            betas.append(beta.mean(0))
 
             H = beta.clone()
-            gate_t = (pre_bn_t.detach() > 0).float()
-            H[:, :, :-1] *= gate_t[:, None, :]
+            gate2 = (pre_bn2.detach() > 0).float()
+            H[:, :, :-1] *= gate2[:, None, :]
 
-            gate_s = (pre_bn_s.detach() > 0).float()
-            H[:, :-1, :] *= gate_s[:, :, None]
-            
-            self.Hs[j - 1] = accumulate(self.Hs[j - 1], H.mean(0))
+            gate1 = (pre_bn1.detach() > 0).float()
+            H[:, :-1, :] *= gate1[:, :, None]
+            Hs.append(H.mean(0))
             j -= 1
+
+        return Hs[::-1], betas[::-1]
+
+
+    def _add(self, o_t, o_s, y):
+        # Compute H given the current banch.
+        Hs_st, betas_st = StatsHs._compute_Hs(self.student, o_s, self.teacher, o_t)
+        Hs_ss, betas_ss = StatsHs._compute_Hs(self.student, o_s, self.student, o_s)
+
+        n_layer = len(Hs_st)
+
+        if len(self.Hs_ss) == 0:
+            self.Hs_ss = [None] * n_layer
+            self.Hs_st = [None] * n_layer
+            self.betas_ss = [None] * n_layer
+            self.betas_st = [None] * n_layer
+
+        for k in range(n_layer):
+            self.Hs_ss[k] = accumulate(self.Hs_ss[k], Hs_ss[k])
+            self.Hs_st[k] = accumulate(self.Hs_st[k], Hs_st[k])
+
+            self.betas_ss[k] = accumulate(self.betas_ss[k], betas_ss[k])
+            self.betas_st[k] = accumulate(self.betas_st[k], betas_st[k])
 
         return 1
 
     def _export(self):
-        output_Hs = [ H / self.count for H in self.Hs ]
-        output_betas = [ beta / self.count for beta in self.betas ]
-        return dict(Hs=output_Hs, betas=output_betas)
+        output_Hs_ss = [ H / self.count for H in self.Hs_ss ]
+        output_Hs_st = [ H / self.count for H in self.Hs_st ]
+        output_betas_ss = [ beta / self.count for beta in self.betas_ss ]
+        output_betas_st = [ beta / self.count for beta in self.betas_st ]
+        return dict(Hs_ss=output_Hs_ss, betas_ss=output_betas_ss, Hs_st=output_Hs_st, betas_st=output_betas_st)
 
     def _reset(self):
-        self.Hs = []
-        self.betas = []
+        self.Hs_ss = []
+        self.betas_ss = []
+
+        self.Hs_st = []
+        self.betas_st = []
 
     def prompt(self):
         return ""
