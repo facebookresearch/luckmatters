@@ -15,6 +15,9 @@ def tune_teacher(eval_loader, teacher):
         activate_ratio = (output[0]["post_lins"][t] > 0).float().mean(dim=0)
         print(f"{t}: {activate_ratio}")
 
+def tune_teacher_last_layer(eval_loader, teacher):
+    output = utils.concatOutput(eval_loader, [teacher])
+
     # Tune the final linear layer to make output balanced as well. 
     y = output[0]["y"]
     y_mean = y.mean(dim=0).cuda()

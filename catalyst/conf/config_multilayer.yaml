@@ -47,6 +47,7 @@ stats_student: false
 stats_teacher_h: false
 stats_student_h: false
 teacher_bias_tune: true
+teacher_bias_last_layer_tune: true
 teacher_strength_decay: 0
 student_scale_down: 0.1
 data_dir: /checkpoint/yuandong

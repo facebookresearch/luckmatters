@@ -302,6 +302,8 @@ def main(args):
 
     if args.teacher_bias_tune:
         teacher_tune.tune_teacher(eval_loader, teacher)
+    if args.teacher_bias_last_layer_tune:
+        teacher_tune.tune_teacher_last_layer(eval_loader, teacher)
 
     # teacher.w0.bias.data.uniform_(-1, 0)
     # teacher.init_orth()
