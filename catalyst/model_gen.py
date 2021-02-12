@@ -52,7 +52,7 @@ def normalize_layer(layer):
         if layer.bias is not None:
             layer.bias.data[i] /= norm
 
-def init_w(layer, use_sep=True):
+def init_w(layer, use_sep=True, weight_choices=[-0.5, -0.25, 0, 0.25, 0.5]):
     sz = layer.weight.size()
     output_d = sz[0]
     input_d = 1
@@ -60,8 +60,7 @@ def init_w(layer, use_sep=True):
         input_d *= s
 
     if use_sep:
-        choices = [-0.5, -0.25, 0, 0.25, 0.5]
-        layer.weight.data[:] = torch.from_numpy(init_separate_w(output_d, input_d, choices)).view(*sz).cuda()
+        layer.weight.data[:] = torch.from_numpy(init_separate_w(output_d, input_d, weight_choices)).view(*sz).cuda()
         if layer.bias is not None:
             layer.bias.data.uniform_(-.5, 0.5)
 
@@ -98,6 +97,8 @@ class Model(nn.Module):
         self.relu = nn.ReLU() if leaky_relu is None else nn.LeakyReLU(leaky_relu)
 
         self.sizes.append(d_output)
+
+        self.use_cnn = False
 
     def init_orth(self):
         for w in self.ws:
@@ -168,10 +169,10 @@ class Model(nn.Module):
         y = self.final_w(hs[-1])
         return dict(hs=hs, post_lins=post_lins, pre_bns=pre_bns, y=y)
 
-    def init_w(self, use_sep=True):
+    def init_w(self, use_sep=True, weight_choices=None):
         for w in self.ws_linear:
-            init_w(w, use_sep=use_sep)
-        init_w(self.final_w, use_sep=use_sep)
+            init_w(w, use_sep=use_sep, weight_choices=weight_choices)
+        init_w(self.final_w, use_sep=use_sep, weight_choices=weight_choices)
 
     def reset_parameters(self):
         for w in self.ws_linear:
@@ -200,6 +201,9 @@ class Model(nn.Module):
             return get_aug_w(self.final_w)
         else:
             raise RuntimeError("j[%d] is out of bound! should be [0, %d]" % (j, len(self.ws)))
+
+    def num_hidden_layers(self):
+        return len(self.ws_linear)
 
     def num_layers(self):
         return len(self.ws_linear) + 1
@@ -231,6 +235,8 @@ class ModelConv(nn.Module):
 
         self.final_w = nn.Linear(last_k * h * w, d_output)
         self.relu = nn.ReLU() if leaky_relu is None else nn.LeakyReLU(leaky_relu)
+
+        self.use_cnn = True
 
     def scale(self, r):
         def _scale(w):
@@ -265,10 +271,10 @@ class ModelConv(nn.Module):
         y = self.final_w(h)
         return dict(hs=hs, y=y)
 
-    def init_w(self, use_sep=True):
+    def init_w(self, use_sep=True, weight_choices=None):
         for w in self.ws_linear:
-            init_w(w, use_sep=use_sep)
-        init_w(self.final_w, use_sep=use_sep)
+            init_w(w, use_sep=use_sep, weight_choices=weight_choices)
+        init_w(self.final_w, use_sep=use_sep, weight_choices=weight_choices)
 
     def normalize(self):
         for w in self.ws_linear:
@@ -292,6 +298,9 @@ class ModelConv(nn.Module):
             return self.final_w.weight.data
         else:
             raise RuntimeError("j[%d] is out of bound! should be [0, %d]" % (j, len(self.ws)))
+
+    def num_hidden_layers(self):
+        return len(self.ws_linear)
 
     def num_layers(self):
         return len(self.ws_linear) + 1

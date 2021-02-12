@@ -11,6 +11,10 @@ import hydra
 import os
 import sys
 
+import teacher_tune
+import stats_operator 
+import utils
+
 import logging
 log = logging.getLogger(__file__)
 
@@ -21,481 +25,6 @@ from copy import deepcopy
 import pickle
 
 from dataset import RandomDataset, init_dataset
-
-def count_size(x):
-    if isinstance(x, dict):
-        return sum([ count_size(v) for k, v in x.items() ])
-    elif isinstance(x, list) or isinstance(x, tuple):
-        return sum([ count_size(v) for v in x ])
-    elif isinstance(x, torch.Tensor):
-        return x.nelement() * x.element_size()
-    else:
-        return sys.getsizeof(x)
-
-def mem2str(num_bytes):
-    assert num_bytes >= 0
-    if num_bytes >= 2 ** 30:  # GB
-        val = float(num_bytes) / (2 ** 30)
-        result = "%.3f GB" % val
-    elif num_bytes >= 2 ** 20:  # MB
-        val = float(num_bytes) / (2 ** 20)
-        result = "%.3f MB" % val
-    elif num_bytes >= 2 ** 10:  # KB
-        val = float(num_bytes) / (2 ** 10)
-        result = "%.3f KB" % val
-    else:
-        result = "%d bytes" % num_bytes
-    return result
-
-def get_mem_usage():
-    import psutil
-
-    mem = psutil.virtual_memory()
-    result = ""
-    result += "available: %s\t" % (mem2str(mem.available))
-    result += "used: %s\t" % (mem2str(mem.used))
-    result += "free: %s\t" % (mem2str(mem.free))
-    # result += "active: %s\t" % (mem2str(mem.active))
-    # result += "inactive: %s\t" % (mem2str(mem.inactive))
-    # result += "buffers: %s\t" % (mem2str(mem.buffers))
-    # result += "cached: %s\t" % (mem2str(mem.cached))
-    # result += "shared: %s\t" % (mem2str(mem.shared))
-    # result += "slab: %s\t" % (mem2str(mem.slab))
-    return result
-
-# CustomMade BN class for computing its Jacobian.
-class BN:
-    def __init__(self, bn, inputs):
-        # bn: BatchNorm1d layer.
-        self.weight = bn.weight.data
-        self.bias = bn.bias.data
-
-        # Compute stats for input [bs, channel]
-        self.mean = inputs.mean(0)
-        
-        zero_inputs = inputs - self.mean[None,:] 
-        self.invstd = zero_inputs.pow(2).mean(0).add(1e-10).pow(-0.5)
-        self.weight_over_std = self.weight * self.invstd
-        self.whitened_inputs = zero_inputs * self.invstd[None,:]
-
-        # norm1 = self.whitened_inputs.mean(0).norm()
-        # norm2 = (self.whitened_inputs.pow(2).mean(0) - 1).norm()
-        # if norm1 > 1e-5 or norm2 > 1e-5:
-        #    raise RuntimeError(f"Init: norm1 = {norm1} or norm2 = {norm2} is too big!")
-
-    def forwardJ(self, x):
-        # x: [bs, channel]
-        return (x - self.mean[None,:]) * self.weight_over_std + self.bias 
-
-    def backwardJ(self, g):
-        # g: [bs, channel]
-        # projection.
-        g_zero = g - g.mean(0)[None,:]
-        #import pdb
-        #pdb.set_trace()
-        coeffs = (g_zero * self.whitened_inputs).mean(0)
-        g_projected = g_zero - coeffs[None,:] * self.whitened_inputs  
-
-        # check..
-        # g_projected.mean(0) should be zero.
-        # (g_projected * self.whitened_inputs).mean(0) should be zero. 
-        '''
-        norm1 = g_projected.mean(0).norm()
-        norm2 = (g_projected * self.whitened_inputs).mean(0).norm()
-        import pdb
-        pdb.set_trace()
-        if norm1 > 1e-5 or norm2 > 1e-5:
-            raise RuntimeError(f"norm1 = {norm1} or norm2 = {norm2} is too big!")
-        '''
-
-        return g_projected * self.weight_over_std[None,:]
-
-def model2numpy(model):
-    return { k : v.cpu().numpy() for k, v in model.state_dict().items() }
-
-def activation2numpy(output):
-    if isinstance(output, dict):
-        return { k : activation2numpy(v) for k, v in output.items() }
-    elif isinstance(output, list):
-        return [ activation2numpy(v) for v in output ]
-    elif isinstance(output, Variable):
-        return output.data.cpu().numpy()
-
-def compute_Hs(net1, output1, net2, output2):
-    # Compute H given the current banch.
-    sz1 = net1.sizes
-    sz2 = net2.sizes
-    
-    bs = output1["hs"][0].size(0)
-    
-    assert sz1[-1] == sz2[-1], "the output size of both network should be the same: %d vs %d" % (sz1[-1], sz2[-1])
-
-    H = torch.cuda.FloatTensor(bs, sz1[-1] + 1, sz2[-1] + 1)
-    for i in range(bs):
-        H[i,:,:] = torch.eye(sz1[-1] + 1).cuda()
-
-    Hs = []
-    betas = []
-
-    # Then we try computing the other rels recursively.
-    j = len(output1["hs"])
-    pre_bns1 = output1["pre_bns"][::-1]
-    pre_bns2 = output2["pre_bns"][::-1]
-
-    for pre_bn1, pre_bn2 in zip(pre_bns1, pre_bns2):
-        # W: of size [output, input]
-        W1t = net1.from_bottom_aug_w(j).t()
-        W2 = net2.from_bottom_aug_w(j)
-
-        # [bs, input_dim_net1, input_dim_net2]
-        beta = torch.FloatTensor(bs, W1t.size(0), W2.size(1))
-        for i in range(bs):
-            beta[i, :, :] = (W1t @ H[i, :, :].cuda() @ W2).cpu()
-        # H_new = torch.bmm(torch.bmm(W1, H), W2)
-
-        betas.append(beta.mean(0))
-
-        H = beta.clone()
-        gate2 = (pre_bn2 > 0).float()
-        H[:, :, :-1] *= gate2[:, None, :]
-
-        gate1 = (pre_bn1 > 0).float()
-        H[:, :-1, :] *= gate1[:, :, None]
-        Hs.append(H.mean(0))
-        j -= 1
-
-    return Hs[::-1], betas[::-1]
-
-'''
-def compute_Hs(net1, output1, net2, output2):
-    # Compute H given the current banch.
-    sz1 = net1.sizes
-    sz2 = net2.sizes
-    
-    bs = output1["hs"][0].size(0)
-    
-    assert sz1[-1] == sz2[-1], "the output size of both network should be the same: %d vs %d" % (sz1[-1], sz2[-1])
-
-    H = torch.cuda.FloatTensor(bs, sz1[-1], sz2[-1])
-    for i in range(bs):
-        H[i,:,:] = torch.eye(sz1[-1]).cuda()
-
-    Hs = []
-    betas = []
-
-    # Then we try computing the other rels recursively.
-    j = len(output1["hs"])
-    pre_bns1 = output1["pre_bns"][::-1]
-    pre_bns2 = output2["pre_bns"][::-1]
-
-    for pre_bn1, pre_bn2 in zip(pre_bns1, pre_bns2):
-        # W: of size [output, input]
-        W1t = net1.from_bottom_linear(j).t()
-        W2 = net2.from_bottom_linear(j)
-
-        # [bs, input_dim_net1, input_dim_net2]
-        beta = torch.cuda.FloatTensor(bs, W1t.size(0), W2.size(1))
-        for i in range(bs):
-            beta[i, :, :] = W1t @ H[i, :, :] @ W2
-        # H_new = torch.bmm(torch.bmm(W1, H), W2)
-
-        betas.append(beta.mean(0).cpu())
-
-        gate2 = (pre_bn2 > 0).float()
-        if net2.has_bn:
-            bn2 = BN(net2.from_bottom_bn(j - 1), pre_bn2)
-            gate2 = bn2.forwardJ(gate2)
-
-        AA = beta * gate2[:, None, :]
-
-        if net1.has_bn:
-            # pre_bn: [bs, input_dim]
-            bn1 = BN(net1.from_bottom_bn(j - 1), pre_bn1)
-            # gate: [bs, input_dim]
-            for k in range(AA.size(2)):
-                AA[:,:,k] = bn1.backwardJ(AA[:,:,k])
-        gate1 = (pre_bn1 > 0).float()
-
-        H = gate1[:, :, None] * AA
-        Hs.append(H.mean(0).cpu())
-        j -= 1
-
-    return Hs[::-1], betas[::-1]
-'''
-
-def stats_from_rel(student, rels, first_n=10):
-    # Check whether a student node is related to teacher. 
-    nLayer = len(rels)
-    total_diff = np.zeros( (nLayer, first_n + 1) )
-
-    means = np.zeros( (nLayer, 3) )
-    stds = np.zeros( (nLayer, 3) )
-    
-    for t, rel in enumerate(rels):
-        # Starting from the lowest layer. 
-        values, indices = rel.sum(0).sort(1, descending=True)
-        # For each student node. 
-        W_out = student.from_bottom_linear(t + 1)
-        energies, energy_indices = W_out.pow(2).sum(0).sort(0, descending=True)
-
-        # for j in range(rel.size(1)):
-        for i, j in enumerate(energy_indices):
-            v = values[j]
-            best = v[0]
-            diff = v[0] - v[1]
-            t_idx = indices[j][0]
-            #log.info("Layer[%d], student node %d: best: %f [delta: %f], teacher idx: %d, act_corr: %f" % \
-            #        (t, j, best, diff, t_idx, corr[t][t_idx, j]))
-            if i < first_n:
-                total_diff[t, i] += diff
-            else:
-                total_diff[t, -1] += diff
-
-        first = values[:, 0].clone().view(-1)
-        second = values[:, 1].clone().view(-1) 
-        rest = values[:, 2:].clone().view(-1) 
-
-        means[t, 0] = first.mean() 
-        means[t, 1] = second.mean()
-        means[t, 2] = rest.mean()
-        stds[t, 0] = first.std() 
-        stds[t, 1] = second.std()
-        stds[t, 2] = rest.std()
-        
-    # Make it cumulative. 
-    for i in range(first_n):
-        total_diff[:, i + 1] += total_diff[:, i] 
-
-    return total_diff, dict(means=means, stds=stds)
-
-def to_cpu(x):
-    if isinstance(x, dict):
-        return { k : to_cpu(v) for k, v in x.items() }
-    elif isinstance(x, list):
-        return [ to_cpu(v) for v in x ]
-    elif isinstance(x, torch.Tensor):
-        return x.cpu()
-    else:
-        return x
-
-def accumulate(all_y, y):
-    if all_y is None:
-        all_y = dict()
-        for k, v in y.items():
-            if isinstance(v, list):
-                all_y[k] = [ [vv] for vv in v ]
-            else:
-                all_y[k] = [v]
-    else:
-        for k, v in all_y.items():
-            if isinstance(y[k], list):
-                for vv, yy in zip(v, y[k]):
-                    vv.append(yy)
-            else:
-                v.append(y[k])
-
-    return all_y
-
-def combine(all_y):
-    output = dict()
-    for k, v in all_y.items():
-        if isinstance(v[0], list):
-            output[k] = [ torch.cat(vv) for vv in v ]
-        else:
-            output[k] = torch.cat(v)
-
-    return output
-
-def concatOutput(loader, use_cnn, nets, condition=None):
-    outputs = [None] * len(nets)
-
-    with torch.no_grad():
-        for i, (x, _) in enumerate(loader):
-            if not use_cnn:
-                x = x.view(x.size(0), -1)
-            x = x.cuda()
-
-            outputs = [ accumulate(output, to_cpu(net(x))) for net, output in zip(nets, outputs) ]
-            if condition is not None and not condition(i):
-               break
-
-    return [ combine(output) for output in outputs ]
-
-def getCorrs(loader, teacher, student, args):
-    output_t, output_s = concatOutput(loader, args.use_cnn, [teacher, student], lambda i: i < 20)
-    corrsMats = acts2corrMats(output_t["hs"], output_s["hs"])
-    corrsIndices = [ corrMat2corrIdx(corr) for corr in corrsMats ]
-    return corrsMats, corrsIndices, output_t, output_s
-
-def compare_weights(student, init_student):
-    w_norms = []
-    delta_ws = []
-    delta_ws_rel = []
-    n = student.num_layers()
-    for i in range(n):
-        W = student.from_bottom_linear(i)
-        W_init = init_student.from_bottom_linear(i)
-        w_norms.append(W.pow(2).mean(0).sqrt())
-        delta_w = (W - W_init).pow(2).mean(0).sqrt()
-        delta_w_rel = delta_w / W_init.pow(2).mean(0).sqrt()
-        delta_ws.append(delta_w.cpu())
-        delta_ws_rel.append(delta_w_rel.cpu())
-        
-    return delta_ws, delta_ws_rel, w_norms
-
-def get_layer_stats(hs):
-    s = []
-    for i, h in enumerate(hs):
-        act_ratio = (h > 1e-5).float().mean(0)
-        s.append(f"L{i}: min/max/mean: {act_ratio.min():#.2f}/{act_ratio.max():#.2f}/{act_ratio.mean():#.2f}") 
-
-    return ", ".join(s)
-
-
-def eval_models(iter_num, loader, teacher, student, loss_func, args, init_corrs, init_student, active_nodes=None):
-    delta_ws, delta_ws_rel, w_norms = compare_weights(student, init_student)
-
-    corr, corr_indices, output_t, output_s = getCorrs(loader, teacher, student, args)
-    t_std = output_t["y"].data.std()
-    s_std = output_s["y"].data.std()
-
-    # corr_ss = acts2corrMats(output_s["hs"], output_s["hs"])
-    # corr_indices_ss = [ corrMat2corrIdx(corr) for corr in corr_ss ]
-
-    err = loss_func(output_t["y"].data, output_s["y"].data)
-
-    # pick_mats = corrIndices2pickMats(corr_indices)
-    # Combined student nodes to form a teacher node. 
-    # Some heuristics here.
-    combined_mats = [ (100 * (c - c.max(dim=1,keepdim=True)[0])).exp() for c in corr ]
-
-    stats = dict()
-    verbose = False
-
-    if args.stats_teacher:
-        # check whether teacher has good stats.
-        log.info("Teacher: " + get_layer_stats(output_t["hs"]))
-
-    if args.stats_teacher_h:
-        stats["teacher_h"] = [ h.cpu() for h in output_t["hs"] ]
-
-    if args.stats_student:
-        # check whether teacher has good stats.
-        log.info("Student: " + get_layer_stats(output_s["hs"]))
-        
-    if args.stats_student_h:
-        stats["student_h"] = [ h.cpu() for h in output_s["hs"] ]
-
-    if args.stats_H:
-        Hs_st, betas_st = compute_Hs(student, output_s, teacher, output_t)
-        Hs_ss, betas_ss = compute_Hs(student, output_s, student, output_s)
-
-        stats.update(dict(Hs=Hs_ss, Hs_s=Hs_st, betas=betas_ss, betas_s=betas_st))
-
-        if verbose:
-            with np.printoptions(precision=3, suppress=True, linewidth=120):
-                layer = 0
-                for H_st, H_ss in zip(Hs_st, Hs_ss):
-                    m = combined_mats[layer]
-                    # From bottom to top
-
-                    '''
-                    log.info(f"{layer}: H*: ")
-                    alpha = H_st.sum(0)[pick_mat, :]
-                    log.info(alpha.cpu().numpy())
-                    log.info(f"{layer}: H: ")
-                    beta = H_ss.sum(0)[:, pick_mat][pick_mat, :]
-                    log.info(beta.cpu().numpy())
-                    log.info(f"{layer}: alpha / beta: ")
-                    log.info( (alpha / beta).cpu().numpy() )
-                    '''
-
-                    W_s = m @ student.from_bottom_linear(layer)
-                    if layer > 0:
-                        W_s = W_s @ combined_mats[layer-1].t()
-                    W_t = teacher.from_bottom_linear(layer)
-
-                    log.info(f"{layer}: Student W (after renorm)")
-                    # Student needs to be renormalized.
-                    W_s /= W_s.norm(dim=1, keepdim=True) + 1e-5
-                    log.info(W_s.cpu().numpy())
-                    log.info(f"{layer}: Teacher W")
-                    log.info(W_t.cpu().numpy())
-                    # log.info(W_t.norm(dim=1))
-                    log.info(f"{layer}: Teacher / Student W")
-                    log.info( (W_t / (W_s + 1e-6)).cpu().numpy() )
-
-                    layer += 1
-
-                W_s = student.from_bottom_linear(layer) @ combined_mats[-1].t()
-                W_t = teacher.from_bottom_linear(layer)
-
-                log.info(f"{layer}: Final Student W (after renorm)")
-                W_s /= W_s.norm(dim=1, keepdim=True) + 1e-5
-                log.info(W_s.cpu().numpy())
-                log.info(f"{layer}: Final Teacher W")
-                log.info(W_t.cpu().numpy())
-                # log.info(W_t.norm(dim=2))
-                log.info(f"{layer}: Final Teacher / Student W")
-                log.info( (W_t / (W_s + 1e-6)).cpu().numpy() )
-
-    '''
-    total_diff, stats = stats_from_rel(student, rels_st)
-    total_diff_ss, stats_ss = stats_from_rel(student, rels_ss)
-    with np.printoptions(precision=3, suppress=True):
-        # log.info("Total diff: %s" % str(total_diff))
-        log.info(stats["means"])
-        # log.info("Total diff_ss: %s" % str(total_diff_ss))
-        log.info(stats_ss["means"])
-        #if last_total_diff is not None:
-        #    percent = (total_diff - last_total_diff) / last_total_diff * 100
-        #    log.info("Increment percent: %s" % str(percent) )
-    last_total_diff = total_diff
-    '''
-
-    result = compareCorrIndices(init_corrs, corr_indices)
-    log.info(f"[{iter_num}] {get_corrs(result, active_nodes=active_nodes, first_n=5)}")
-
-    accuracy = 0.0
-    if not isinstance(args.dataset, RandomDataset):
-        accuracy = full_eval_cls(loader, student, args)
-    
-    # log.info("[%d] Err: %f. std: t=%.3f/s=%.3f, active_ratio: %s" % (iter_num, err.data.item(), t_std, s_std, ratio_str))
-    log.info("[%d] Err: %f, accuracy: %f%%" % (iter_num, err.data.item(), accuracy))
-    if verbose:
-        ratio_str = ""
-        for layer, (h_t, h_s) in enumerate(zip(output_t["hs"], output_s["hs"])):
-            this_layer = []
-            # for k, (h_tt, h_ss) in enumerate(zip(h_t, h_s)):
-            for k in range(h_t.size(1)):
-                h_tt = h_t[:, k]
-                teacher_ratio = (h_tt.data > 0.0).sum().item() / h_tt.data.numel()
-                # student_ratio = (h_ss.data > 0.0).sum().item() / h_ss.data.numel()
-                # this_layer.append("[%d] t=%.2f%%/s=%.2f%%" % (k, teacher_ratio * 100.0, student_ratio * 100.0))
-                this_layer.append("[%d]=%.2f%%" % (k, teacher_ratio * 100.0))
-
-            student_ratio = (h_s.data > 1.0).sum().item() / h_s.data.numel()
-            ratio_str += ("L%d" % layer) + ": " + ",".join(this_layer) + "; s=%.2f%% | " % (student_ratio * 100.0)
-
-            # all_corrs.append([c.cpu().numpy() for c in corr])
-            # all_weights.append(model2numpy(student))
-            # all_activations.append(dict(t=activation2numpy(output_t), s=activation2numpy(output_s)))
-        log.info("[%d] std: t=%.3f/s=%.3f, active_ratio: %s" % (i, t_std, s_std, ratio_str))
-
-    if args.stats_w:
-        for i, (delta_w, delta_w_rel, w_norm) in enumerate(zip(delta_ws, delta_ws_rel, w_norms)):
-            log.info(f"[{i}]: delta_w: {get_stat(delta_w)} | delta_w_rel: {get_stat(delta_w_rel)} | w_norm: {get_stat(w_norm)}")
-
-        stats.update(dict(delta_ws=delta_ws, delta_ws_rel=delta_ws_rel, w_norms=w_norms))
-
-    stats.update(dict(iter_num=iter_num, accuracy=accuracy, loss=err.data.item()))
-    stats["corrs"] = [ c.t().cpu() for c in corr ]
-
-    # stats["teacher_h"] = [ h.cpu() for h in output_t["hs"] ]
-    # stats["student_h"] = [ h.cpu() for h in output_s["hs"] ]
-    # stats["corrs_ss"] = [ c.t().cpu() for c in corr_ss ]
-
-    return stats
 
 def get_active_nodes(teacher):
     # Getting active node for teachers. 
@@ -511,8 +40,73 @@ def get_active_nodes(teacher):
 
     return active_nodes
 
-def optimize(train_loader, eval_loader, teacher, student, loss_func, active_nodes, args, lrs):
-    optimizer = optim.SGD(student.parameters(), lr = lrs[0], momentum=args.momentum, weight_decay=args.weight_decay)
+
+def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, optimizer, args):
+    teacher.eval()
+    student.train()
+
+    train_stats_op.reset()
+
+    for x, y in train_loader:
+        optimizer.zero_grad()
+        if not args.use_cnn:
+            x = x.view(x.size(0), -1)
+        x = x.cuda()
+        output_t = teacher(x)
+        output_s = student(x)
+
+        err = loss_func(output_s["y"], output_t["y"].detach())
+        if torch.isnan(err).item():
+            log.info("NAN appears, optimization aborted")
+            return dict(exit="nan")
+        err.backward()
+
+        train_stats_op.add(output_t, output_s, y)
+
+        optimizer.step()
+        if args.normalize:
+            student.normalize()
+
+    train_stats = train_stats_op.export()
+
+    log.info(f"[{i}]: Train Stats:")
+    log.info(train_stats_op.prompt())
+
+    return train_stats
+
+def eval_model(i, eval_loader, teacher, student, eval_stats_op):
+    # evaluation
+    teacher.eval()
+    student.eval()
+
+    eval_stats_op.reset()
+
+    with torch.no_grad():
+        for x, y in eval_loader:
+            if not teacher.use_cnn:
+                x = x.view(x.size(0), -1)
+            x = x.cuda()
+            output_t = teacher(x)
+            output_s = student(x)
+
+            eval_stats_op.add(output_t, output_s, y)
+
+    eval_stats = eval_stats_op.export()
+
+    log.info(f"[{i}]: Eval Stats:")
+    log.info(eval_stats_op.prompt())
+
+    return eval_stats
+
+
+def optimize(train_loader, eval_loader, teacher, student, loss_func, train_stats_op, eval_stats_op, args, lrs):
+    if args.optim_method == "sgd":
+        optimizer = optim.SGD(student.parameters(), lr = lrs[0], momentum=args.momentum, weight_decay=args.weight_decay)
+    elif args.optim_method == "adam":
+        optimizer = optim.Adam(student.parameters(), lr = lrs[0], weight_decay=args.weight_decay)
+    else:
+        raise RuntimeError(f"Unknown optim method: {args.optim_method}")
+
     # optimizer = optim.SGD(student.parameters(), lr = 1e-2, momentum=0.9)
     # optimizer = optim.Adam(student.parameters(), lr = 0.0001)
 
@@ -526,69 +120,36 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, active_node
     
     init_student = deepcopy(student)
 
-    # Match response
-    _, init_corrs_train, _, _ = getCorrs(train_loader, teacher, student, args)
-    _, init_corrs_eval, _, _ = getCorrs(eval_loader, teacher, student, args)
-
-    def add_prefix(prefix, d):
-        return { prefix + k : v for k, v in d.items() }
-
-    def get_stats(i):
-        teacher.eval()
-        student.eval()
-        
-        log.info("Train stats:")
-        train_res = eval_models(i, train_loader, teacher, student, loss_func, args, init_corrs_train, init_student, active_nodes=active_nodes)
-        train_stats = add_prefix("train_", train_res)
-
-        log.info("Eval stats:")
-        eval_res = eval_models(i, eval_loader, teacher, student, loss_func, args, init_corrs_eval, init_student, active_nodes=active_nodes) 
-        eval_stats = add_prefix("eval_", eval_res)
-
-        train_stats.update(eval_stats)
-
-        filename = os.path.join(os.getcwd(), f"student-{i}.pt")
-        torch.save(student, filename)
-        log.info(f"[{i}] Saving student to {filename}")
-        log.info(get_mem_usage())
-        log.info(f"bytesize of stats: {count_size(train_stats) / 2 ** 20} MB")
-
-        log.info("")
-        log.info("")
-
-        return train_stats
-
-    stats.append(get_stats(-1))
+    eval_stats = eval_model(-1, eval_loader, teacher, student, eval_stats_op)
+    eval_stats["iter"] = -1
+    stats.append(eval_stats)
 
     for i in range(args.num_epoch):
-        teacher.eval()
-        student.train()
         if i in lrs:
             lr = lrs[i]
             log.info(f"[{i}]: lr = {lr}")
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr
-        # sample data from Gaussian distribution.
-        # xsel = Variable(X.gather(0, sel))
-        for x, y in train_loader:
-            optimizer.zero_grad()
-            if not args.use_cnn:
-                x = x.view(x.size(0), -1)
-            x = x.cuda()
-            output_t = teacher(x)
-            output_s = student(x)
 
-            err = loss_func(output_s["y"], output_t["y"].detach())
-            if torch.isnan(err).item():
-                stats.append(dict(exit="nan"))
-                log.info("NAN appears, optimization aborted")
-                return stats
-            err.backward()
-            optimizer.step()
-            if args.normalize:
-                student.normalize()
+        train_stats = train_model(i, train_loader, teacher, student, train_stats_op, loss_func, optimizer, args)
 
-        stats.append(get_stats(i))
+        this_stats = dict(iter=i)
+        this_stats.update(train_stats)
+
+        if "exit" in train_stats:
+            stats.append(this_stats)
+            return stats
+
+        eval_stats = eval_model(i, eval_loader, teacher, student, eval_stats_op)
+
+        this_stats.update(eval_stats)
+        log.info(f"[{i}]: Bytesize of stats: {utils.count_size(this_stats) / 2 ** 20} MB")
+
+        stats.append(this_stats)
+
+        log.info("")
+        log.info("")
+
         if args.regen_dataset_each_epoch:
             train_loader.dataset.regenerate()
 
@@ -596,14 +157,6 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, active_node
             # Only store starting and end stats.
             end_stats = [ stats[0], stats[-1] ]
             torch.save(end_stats, f"summary.pth")
-
-    log.info("After optimization: ")
-    _, final_corrs, _, _ = getCorrs(eval_loader, teacher, student, args)
-
-    result = compareCorrIndices(init_corrs_train, final_corrs)
-    if args.json_output:
-        log.info("json_output: " + json.dumps(result))
-    log.info(get_corrs(result, active_nodes=active_nodes, first_n=5))
 
     # Save the summary at the end.
     end_stats = [ stats[0], stats[-1] ]
@@ -617,24 +170,20 @@ def set_all_seeds(rand_seed):
     torch.manual_seed(rand_seed)
     torch.cuda.manual_seed(rand_seed)
 
+def parse_lr(lr_str):
+    if lr_str.startswith("{"):
+        lrs = eval(lr_str)
+    else:
+        items = lr_str.split("-")
+        lrs = {}
+        if len(items) == 1:
+            # Fixed learning rate.
+            lrs[0] = float(items[0])
+        else:
+            for k, v in zip(items[::2], items[1::2]):
+                lrs[int(k)] = float(v)
 
-def full_eval_cls(loader, net, args):
-    net.eval()
-    with torch.no_grad():
-        accuracy = 0
-        total = 0
-        for x, y in loader:
-            if not args.use_cnn:
-                x = x.view(x.size(0), -1)
-            x = x.cuda()
-            y = y.cuda()
-            output = net(x)
-            _, predicted = output["y"].max(1)
-            accuracy += predicted.eq(y).sum().item()
-            total += x.size(0)
-        accuracy *= 100 / total
-
-    return accuracy
+    return lrs
 
 @hydra.main(config_path='conf/config_multilayer.yaml', strict=True)
 def main(args):
@@ -644,9 +193,7 @@ def main(args):
     set_all_seeds(args.seed)
 
     ks = args.ks
-    lrs = eval(args.lr)
-    if not isinstance(lrs, dict):
-        lrs = { 0: lrs }
+    lrs = parse_lr(args.lr)
 
     if args.perturb is not None or args.same_dir or args.same_sign:
         args.node_multi = 1
@@ -671,6 +218,7 @@ def main(args):
     # ks = [50, 75, 100, 125]
     log.info(args.pretty())
     log.info(f"ks: {ks}")
+    log.info(f"lr: {lrs}")
 
     if args.d_output > 0:
         d_output = args.d_output 
@@ -716,8 +264,8 @@ def main(args):
             active_ks = ks
         
     else:
-        log.info("Init teacher..`")
-        teacher.init_w(use_sep = not args.no_sep)
+        log.info("Init teacher..")
+        teacher.init_w(use_sep = not args.no_sep, weight_choices=list(args.weight_choices))
         if args.teacher_strength_decay > 0: 
             # Prioritize teacher node.
             teacher.prioritize(args.teacher_strength_decay)
@@ -749,34 +297,13 @@ def main(args):
         teacher.w0.weight.data[i, span*i:span*i+span] = 1
     '''
 
-    if args.cross_entropy:
-        # Slower to converge since the information provided from the 
-        # loss function is not sufficient 
-        loss = nn.CrossEntropyLoss().cuda()
-        def loss_func(y, target):
-            values, indices = target.max(1)
-            err = loss(y, indices)
-            return err
-    else:
-        loss = nn.MSELoss().cuda()
-        def loss_func(y, target):
-            return loss(y, target)
-
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batchsize, shuffle=True, num_workers=4)
     eval_loader = torch.utils.data.DataLoader(eval_dataset, batch_size=args.eval_batchsize, shuffle=True, num_workers=4)
 
     if args.teacher_bias_tune:
-        # Tune the bias of the teacher so that their activation/inactivation is approximated 0.5/0.5
-        for t in range(len(ks)):
-            output = concatOutput(eval_loader, args.use_cnn, [teacher])
-            estimated_bias = output[0]["post_lins"][t].median(dim=0)[0]
-            teacher.ws_linear[t].bias.data[:] -= estimated_bias.cuda() 
-          
-        # double check
-        output = concatOutput(eval_loader, args.use_cnn, [teacher])
-        for t in range(len(ks)):
-            activate_ratio = (output[0]["post_lins"][t] > 0).float().mean(dim=0)
-            print(f"{t}: {activate_ratio}")
+        teacher_tune.tune_teacher(eval_loader, teacher)
+    if args.teacher_bias_last_layer_tune:
+        teacher_tune.tune_teacher_last_layer(eval_loader, teacher)
 
     # teacher.w0.bias.data.uniform_(-1, 0)
     # teacher.init_orth()
@@ -793,6 +320,34 @@ def main(args):
 
     log.info("=== Start ===")
     std = args.data_std
+
+    stats_op = stats_operator.StatsCollector(teacher, student)
+
+    # Compute Correlation between teacher and student activations. 
+    stats_op.add_stat(stats_operator.StatsCorr, active_nodes=active_nodes, cnt_thres=0.9)
+
+    if args.cross_entropy:
+        stats_op.add_stat(stats_operator.StatsCELoss)
+
+        loss = nn.CrossEntropyLoss().cuda()
+        def loss_func(predicted, target):
+            _, target_y = target.max(1)
+            return loss(predicted, target_y)
+
+    else:
+        stats_op.add_stat(stats_operator.StatsL2Loss)
+        loss_func = nn.MSELoss().cuda()
+
+    # Duplicate training and testing. 
+    eval_stats_op = deepcopy(stats_op)
+    stats_op.label = "train"
+    eval_stats_op.label = "eval"
+
+    stats_op.add_stat(stats_operator.StatsGrad)
+    stats_op.add_stat(stats_operator.StatsMemory)
+
+    if args.stats_H:
+        eval_stats_op.add_stat(stats_operator.StatsHs)
 
     # pickle.dump(model2numpy(teacher), open("weights_gt.pickle", "wb"), protocol=2)
 
@@ -820,7 +375,7 @@ def main(args):
         # import pdb
         # pdb.set_trace()
 
-        stats = optimize(train_loader, eval_loader, teacher, student, loss_func, active_nodes, args, lrs)
+        stats = optimize(train_loader, eval_loader, teacher, student, loss_func, stats_op, eval_stats_op, args, lrs)
         all_stats.append(stats)
 
     torch.save(all_stats, "stats.pickle")

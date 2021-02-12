@@ -3,17 +3,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
-def plot_multilayer_l_shape(stats, epoch_split=5, save_file=None):
+def plot_multilayer_l_shape(stats, epoch_split=5, save_file=None, epoch_till=None, beta_range=None):
     s = stats[0][-1]
     num_layer = len(s["train_corrs"])
 
     total_epoch = len(stats[0]) - 1
+    if epoch_till is not None and epoch_till < total_epoch:
+        total_epoch = epoch_till
+
     epochs = [ int(i * total_epoch / (epoch_split - 1)) for i in range(epoch_split) ]
     
     plt.figure(figsize=(20, 10))
     count = 0
-
-    beta_limits = [1, 1, 1, 1]
 
     for layer in range(num_layer - 1, -1, -1):
         print(f"{layer}: student/teacher: {s['train_corrs'][layer].size()}")
@@ -33,12 +34,13 @@ def plot_multilayer_l_shape(stats, epoch_split=5, save_file=None):
             if it == 0:
                 plt.ylabel("$\\sqrt{\\mathbb{E}_{\\mathbf{x}}\\left[\\beta_{kk}(\\mathbf{x})\\right]}$")
             else:
-                ax.set_yticklabels([])
+                if beta_range is not None:
+                    ax.set_yticklabels([])
                 
             if layer == 0:
                 plt.xlabel("Max correlation among teacher")
 
-            plt.axis([-0.05, 1.05, -0.001, beta_limits[layer]])
+            plt.axis([-0.05, 1.05, -0.001, beta_range])
             
             if layer == 3:
                 plt.title(f"Epoch {it}")
