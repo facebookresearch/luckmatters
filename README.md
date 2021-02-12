@@ -1,11 +1,10 @@
 This repo contains the code of the following two papers:
 
-### Over-parameterization as a Catalyst for Better Generalization of Deep ReLU network
+### Student Specialization in Deep ReLU Networks With Finite Width and Input Dimension 
 
 Yuandong Tian
 
-arxiv [link](https://arxiv.org/abs/1909.13458)
-
+ICML 2020 [link](https://arxiv.org/abs/1909.13458)
 
 ### Luck Matters: Luck Matters: Understanding Training Dynamics of Deep ReLU Networks
 
