@@ -19,7 +19,7 @@ python main.py method=simclr use_optimizer=adam optimizer.params.weight_decay=0 
 
 You can also set `trainer.nce_loss.exact_cov=false` to get performance when using normal NCE loss. Set `trainer.nce_loss.beta` to be nonzero for more general loss functions, when `beta` can be either positive or negative.  
 
-For Hierarchical Latent Tree Model (HLTM) in Section 6, please check the code in `../hltm`.
+For Hierarchical Latent Tree Model (HLTM) in Section 6, please check the code [here](https://github.com/facebookresearch/luckmatters/tree/master/ssl/hltm).
 
 ## Second paper [2]
 To run DirectPred introduced in [2], here is a sample command. 
