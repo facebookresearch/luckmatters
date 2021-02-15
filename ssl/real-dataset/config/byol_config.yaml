@@ -1,0 +1,144 @@
+network:
+  name: resnet18
+  pretrained_path: None
+
+  projection_head:
+    mlp_hidden_size: 512
+    projection_size: 128
+
+  predictor_head:
+    mlp_hidden_size: 512
+    projection_size: 128
+
+data_transforms:
+  s: 1
+  input_shape: (96,96,3)
+
+# Can be either simclr or byol
+method: byol 
+
+trainer:
+  batch_size: 128
+  save_per_epoch: 5
+  m: 0.996 # momentum update
+  # simply divide 
+  checkpoint_interval: 5000
+  max_epochs: 100
+  num_workers: 16
+  target_noise: 0.005
+  train_predictor: true
+  has_predictor: true
+
+  projector_params:
+    has_bias: true
+    has_relu: true
+    custom_nz: null
+    normalization: bn
+    has_bn_affine: false
+    additional_bn_at_input: false
+    custom_bn: 
+      mean: normal
+      std: normal
+  
+  predictor_params:
+    has_bias: true
+    has_relu: true
+    custom_nz: null
+    normalization: bn
+    has_bn_affine: false
+    additional_bn_at_input: false
+    custom_bn: 
+      mean: normal
+      std: normal
+  
+  projector_same_as_predictor: false
+  predictor_init:
+    low: null
+    high: null
+
+  # Only use in simclr
+  nce_loss:
+    temperature: 0.5
+    use_cosine_similarity: True
+    beta: 0
+    add_one_in_neg: false
+    exact_cov: false
+    exact_cov_unaug_sim: false
+
+  grad_combination_margin: null
+
+  # Can be symmetric, diagonal, onehalfeig, symmetric_norm, solve, minimal_space
+  predictor_reg: "symmetric"
+  predictor_freq: 0
+  predictor_rank: 0.5
+  predictor_eig: 0.5
+  predictor_eps: 1e-5
+
+  dyn_time: null
+  dyn_eps: 0.0
+  dyn_eps_inside: false
+  dyn_reg: null
+  dyn_zero_mean: false
+  # null = average per predictor_freq
+  dyn_lambda: 0.8
+  dyn_psd: null
+  dyn_bn: false
+  dyn_diagonalize: false
+  dyn_sym: true
+  dyn_convert: 2
+  dyn_noise: null
+
+  corr_collect: false
+  use_l2_normalization: true
+
+  # Predictor weight decay.
+  predictor_wd: null
+
+  balance_type: clamp
+  n_corr: 2
+
+  # When predictor_reg == "solve", how W should be obtained, left or right
+  solve_direction: "left"
+
+  # call stuff that will be called if rand_pred_n_epoch > 0 before initialization.  
+  init_rand_pred: false
+
+  rand_pred_n_epoch: 0
+  rand_pred_n_iter: 0
+  # Can be "all", "top", "bottom"
+  rand_pred_reg: "all"
+
+  noise_blend: 0.0
+
+use_optimizer: sgd
+
+predictor_optimizer_same: true
+
+optimizer:
+  params:
+    lr: 0.03
+    momentum: 0.9
+    weight_decay: 0.0004
+
+predictor_optimizer:
+  params:
+    lr: 0.03
+    momentum: 0.9
+    weight_decay: 0.0004
+
+dataset_path: ./datasets
+# Can be stl10 or cifar10
+dataset: stl10 
+
+seed: 1
+gpu: 0
+
+eval_after_each_epoch: true
+
+githash: 
+sweep_filename: 
+
+test:
+  exp_name_list: "" 
+  load_epoch_list: []
+  batch_size: 512
