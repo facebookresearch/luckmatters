@@ -1,0 +1,19 @@
+depth: 5
+num_children: 2
+batchsize: 128
+N: 64000
+hid: 10
+num_epoch: 20
+save_file: htgm_model.pth
+seed: 1
+lr: 0.1
+
+delta_upper: 1
+delta_lower: 0.7
+loss: nce
+
+eps: 1e-4
+temp: 0.01
+
+githash:
+sweep_filename:
