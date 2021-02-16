@@ -1,12 +1,26 @@
-This repo contains the code of the following two papers:
+This repo contains the code of the following 4 papers:
 
-### Student Specialization in Deep ReLU Networks With Finite Width and Input Dimension 
+### Analysis of Self-supervised learning (`./ssl`) 
+**Understanding Understanding self-supervised Learning Dynamics without Contrastive Pairs**
+
+Yuandong Tian, Xinlei Chen, Surya Ganguli
+
+arXiv [link](https://arxiv.org/abs/2102.06810)  
+
+**Understanding Self-supervised Learning with Dual Deep Networks**
+
+Yuandong Tian, Lantao Yu, Xinlei Chen, Surya Ganguli
+
+arXiv [link](https://arxiv.org/abs/2010.00578) 
+
+### Teacher-student setting 
+**Student Specialization in Deep ReLU Networks With Finite Width and Input Dimension** (`./student_specialization`) 
 
 Yuandong Tian
 
 ICML 2020 [link](https://arxiv.org/abs/1909.13458)
 
-### Luck Matters: Luck Matters: Understanding Training Dynamics of Deep ReLU Networks
+**Luck Matters: Luck Matters: Understanding Training Dynamics of Deep ReLU Networks** (`./luckmatter`)
 
 Yuandong Tian, Tina Jiang, Qucheng Gong, Ari Morcos
 

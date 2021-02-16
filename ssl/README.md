@@ -1,6 +1,6 @@
 ## Understanding Self-supervised learning (BYOL / SimCLR)
 
-The part of the repo covers the following two papers:
+This part of the repo covers the following two papers:
 
 
 [1] **Understanding Self-supervised Learning with Dual Deep Networks** 
@@ -13,5 +13,5 @@ Yuandong Tian, Lantao Yu, Xinlei Chen, Surya Ganguli
 
 Yuandong Tian, Xinlei Chen, Surya Ganguli
 
-arXiv (to appear soon).
+[arXiv](https://arxiv.org/abs/2102.06810)
 

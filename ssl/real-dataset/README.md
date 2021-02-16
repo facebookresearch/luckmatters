@@ -44,7 +44,8 @@ Yuandong Tian, Lantao Yu, Xinlei Chen, Surya Ganguli
 
 Yuandong Tian, Xinlei Chen, Surya Ganguli
 
-arXiv (to appear soon).
+[arXiv](https://arxiv.org/abs/2102.06810)  
+
 
 
 
