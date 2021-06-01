@@ -13,5 +13,5 @@ Yuandong Tian, Lantao Yu, Xinlei Chen, Surya Ganguli
 
 Yuandong Tian, Xinlei Chen, Surya Ganguli
 
-[arXiv](https://arxiv.org/abs/2102.06810)
+ICML 2021 (Long oral) [arXiv](https://arxiv.org/abs/2102.06810)
 
