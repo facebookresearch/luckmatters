@@ -113,6 +113,8 @@ class BYOLTrainer:
         self.rand_pred_reg = params["rand_pred_reg"]
         self.max_epochs = params['max_epochs']
         self.m = params['m']
+        self.use_order_of_variance = params["use_order_of_variance"]
+        self.corr_eigen_decomp = params["corr_eigen_decomp"]
         self.noise_blend = params["noise_blend"]
         self.save_per_epoch = params["save_per_epoch"]
         self.batch_size = params['batch_size']
@@ -235,19 +237,31 @@ class BYOLTrainer:
                     p[:] = (1 - alpha) * p[:] + alpha * w
 
     def compute_w_corr(self, M):
-        D, Q = torch.eig(M, eigenvectors=True)
+        if self.corr_eigen_decomp:
+            if not self.predictor_signaling_2:
+                log.info("compute_w_corr: Use eigen_decomp!")
+            D, Q = torch.eig(M, eigenvectors=True)
+            # Only use the real part. 
+            D = D[:,0]
+        else:
+            # Just use diagonal element. 
+            if not self.predictor_signaling_2:
+                log.info("compute_w_corr: No eigen_decomp, just use diagonal elements!")
+            D = M.diag()
+            Q = torch.eye(M.size(0)).to(D.device)
+             
         # if eigen_values >= 1, scale everything down. 
         balance_type = self.balance_type
         reg = self.dyn_reg
 
         if balance_type == "shrink2mean":
-            mean_eig = D[:,0].mean()
-            eigen_values = (D[:,0] - mean_eig) / 2 + mean_eig
+            mean_eig = D.mean()
+            eigen_values = (D - mean_eig) / 2 + mean_eig
         elif balance_type == "clamp":
-            eigen_values = D[:,0].clamp(min=0, max=1-reg)
+            eigen_values = D.clamp(min=0, max=1-reg)
         elif balance_type == "boost_scale":
-            max_eig = D[:,0].max()
-            eigen_values = D[:, 0].clamp(0) / max_eig
+            max_eig = D.max()
+            eigen_values = D.clamp(0) / max_eig
             # Going through a concave function (dyn_convert > 1, e.g., 2 or sqrt function) to boost small eigenvalues (while still keep very small one to be 0)
             if self.dyn_eps_inside:
                 # Note that here dyn_eps is allowed to be negative.
@@ -261,9 +275,9 @@ class BYOLTrainer:
                 log.info(f"Compute eigenvalues with boost_scale: Top-5: {sorted_values[:5]}, Bottom-5: {sorted_values[-5:]}")
 
         elif balance_type == "scale":
-            max_eig = D[:,0].max()
+            max_eig = D.max()
             if max_eig > 1 - reg:
-                eigen_values = D[:,0] / (max_eig + reg)
+                eigen_values = D / (max_eig + reg)
         else:
             raise RuntimeError(f"Unkonwn balance_type: {balance_type}")
 
@@ -386,13 +400,29 @@ class BYOLTrainer:
                         M = self.cum_corr.get()
                         if M is not None:
                             if not self.predictor_signaling_2:
-                                log.info(f"Set predictor to be input correlation. zero_mean={self.dyn_zero_mean}, freq={self.predictor_freq}, type={self.balance_type}, pow=1/{self.dyn_convert}, eps={self.dyn_eps}, reg={self.dyn_reg}, noise={self.dyn_noise}, eps_inside={self.dyn_eps_inside}")
+                                log.info(f"Set predictor to align with input correlation. zero_mean={self.dyn_zero_mean}, freq={self.predictor_freq}, type={self.balance_type}, pow=1/{self.dyn_convert}, eps={self.dyn_eps}, reg={self.dyn_reg}, noise={self.dyn_noise}, eps_inside={self.dyn_eps_inside}")
 
                             if self.dyn_zero_mean:
                                 mean_f = self.cum_mean1.get()
                                 M -= torch.ger(mean_f, mean_f)
 
                             w = self.compute_w_corr(M)
+
+                            if self.dyn_noise is not None:
+                                w += self.skew / (niter + 1)
+
+                elif self.predictor_reg == "directcopy":
+                    if self.predictor_freq > 0 and niter % self.predictor_freq == 0:
+                        M = self.cum_corr.get()
+                        if M is not None:
+                            if not self.predictor_signaling_2:
+                                log.info(f"Set predictor to be input correlation. zero_mean={self.dyn_zero_mean}, freq={self.predictor_freq}, eps={self.dyn_eps}")
+
+                            if self.dyn_zero_mean:
+                                mean_f = self.cum_mean1.get()
+                                M -= torch.ger(mean_f, mean_f)
+
+                            w = M + self.dyn_eps * torch.eye(M.size(0), dtype=M.dtype, device=M.device)
 
                             if self.dyn_noise is not None:
                                 w += self.skew / (niter + 1)
@@ -683,7 +713,7 @@ class BYOLTrainer:
                targets_to_view_2 = self.bn_before_target(targets_to_view_2)
                targets_to_view_1 = self.bn_before_target(targets_to_view_1)
 
-            if self.predictor_reg in ["minimal_space", "solve", "corr"] or self.corr_collect:
+            if self.predictor_reg in ["minimal_space", "solve", "corr", "directcopy"] or self.corr_collect or self.use_order_of_variance:
                 cross_corr1 = torch.bmm(targets_to_view_1.unsqueeze(2), before_detach_1.unsqueeze(1)).mean(dim=0)
                 cross_corr2 = torch.bmm(targets_to_view_2.unsqueeze(2), before_detach_2.unsqueeze(1)).mean(dim=0)
                 cross_corr = (cross_corr1 + cross_corr2) / 2
@@ -697,8 +727,36 @@ class BYOLTrainer:
                 self.cum_mean2.add(mean_f_ema)
                 self.cum_cross_corr.add(cross_corr)
 
-        loss = self.regression_loss(predictions_from_view_1, targets_to_view_1, l2_normalized=self.use_l2_normalization)
-        loss += self.regression_loss(predictions_from_view_2, targets_to_view_2, l2_normalized=self.use_l2_normalization)
+        if self.use_order_of_variance:
+            if not self.predictor_signaling_2:
+                log.info(f"Use order of variance!")
+
+            # Skip the predictor completely.
+            M = self.cum_corr.get()
+            M2 = self.cum_cross_corr.get()
+            # just check their diagonal.
+            Mdiag = M.diag()
+            M2diag = M2.diag()
+            # ratio 
+            var_ratio = M2diag / (Mdiag + 1e-5)
+            # Ideally we want to have low variance in M2 but high variance in M
+            _, indices = var_ratio.sort()
+            # Then setup the goal
+            d = indices.size(0)
+            d_partial = d // 3
+            good_indices = indices[:d_partial]
+            bad_indices = indices[d_partial:]
+
+            # Compute variance.
+            before_predictor = torch.cat([before_predictor_1, before_predictor_2], dim=0)
+            before_predictor_normalized = before_predictor / before_predictor.norm(dim=1, keepdim=True)
+            variances = before_predictor_normalized.var(dim=0)
+            # Minimize the bad variance (suppress the features), while maximize the good variance (boost the feature)
+            loss = variances[bad_indices].mean() - variances[good_indices].mean()
+        else:
+            loss = self.regression_loss(predictions_from_view_1, targets_to_view_1, l2_normalized=self.use_l2_normalization)
+            loss += self.regression_loss(predictions_from_view_2, targets_to_view_2, l2_normalized=self.use_l2_normalization)
+
         return loss.mean()
 
     def save_model(self, PATH):

@@ -67,7 +67,7 @@ trainer:
 
   grad_combination_margin: null
 
-  # Can be symmetric, diagonal, onehalfeig, symmetric_norm, solve, minimal_space
+  # Can be symmetric, diagonal, onehalfeig, symmetric_norm, solve, minimal_space, corr, directcopy
   predictor_reg: "symmetric"
   predictor_freq: 0
   predictor_rank: 0.5
@@ -109,6 +109,10 @@ trainer:
   rand_pred_reg: "all"
 
   noise_blend: 0.0
+
+  # Without predictor, just use order of variance
+  use_order_of_variance: False
+  corr_eigen_decomp: True
 
 use_optimizer: sgd
 
