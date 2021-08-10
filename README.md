@@ -5,7 +5,7 @@ This repo contains the code of the following 4 papers:
 
 Yuandong Tian, Xinlei Chen, Surya Ganguli
 
-arXiv [link](https://arxiv.org/abs/2102.06810)  
+ICML 2021 [link](https://arxiv.org/abs/2102.06810), *Outstanding Paper Honorable Mention* 
 
 **Understanding Self-supervised Learning with Dual Deep Networks**
 
