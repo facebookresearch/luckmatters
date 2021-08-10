@@ -27,11 +27,11 @@ To run DirectPred introduced in [2], here is a sample command.
 ```
 python main.py seed=1 method=byol trainer.max_epochs=100 trainer.predictor_params.has_bias=false \
   trainer.predictor_params.normalization=no_normalization network.predictor_head.mlp_hidden_size=null \
-  trainer.predictor_reg=corr trainer.predictor_freq=1 trainer.dyn_lambda=0.3 trainer.dyn_reg=0.01 trainer.balance_type=boost_scale
+  trainer.predictor_reg=corr trainer.predictor_freq=1 trainer.dyn_lambda=0.3 trainer.dyn_eps=0.01 trainer.balance_type=boost_scale
 ```
 Note that 
 1. The second line `trainer.predictor_params.normalization=no_normalization` and `network.predictor_head.mlp_hidden_size=null` means that the predictor is linear.  
-2. The third line means that we use DirectPredict with update frequency `freq=1`, `dyn_lambda=0.3` (which is `rho` in Eqn. 19 of [2]) and `dyn_reg=0.01` (which is `eps` in Eqn. 18 of [2]).  
+2. The third line means that we use DirectPredict with update frequency `freq=1`, `dyn_lambda=0.3` (which is `rho` in Eqn. 19 of [2]) and `dyn_eps=0.01` (which is `eps` in Eqn. 18 of [2]).  
 
 # Reference
 [1] **Understanding Self-supervised Learning with Dual Deep Networks** 
