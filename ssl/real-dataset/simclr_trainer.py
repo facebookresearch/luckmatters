@@ -39,14 +39,19 @@ class SimCLRTrainer(object):
         self.params = params
         self.nt_xent_criterion = NTXentLoss(self.device, params['batch_size'], **params['nce_loss'])
 
-        if self.params["use_customized_l2"]:
-            log.info("SimCLRTrainer: use_customized_l2")
+        l2_reg_type = self.params['l2_reg_type']
+        log.info(f"SimCLRTrainer: l2_reg_type: {l2_reg_type}")
+
+        if l2_reg_type == "regular":
+            self.l2_normalizer = lambda x: F.normalize(x, dim=1) 
+        elif l2_reg_type == "only_mag": 
+            self.l2_normalizer = SpecializedL2Regularizer.apply
+        elif l2_reg_type == "no_reg":
+            self.l2_normalizer = lambda x: x
+        else:
+            raise RuntimeError(f"Unknown l2_reg_type = {l2_reg_type}")
 
     def _step(self, model, xis, xjs, xs, n_iter):
-        if self.params["use_customized_l2"]:
-            l2_normalizer = SpecializedL2Regularizer.apply
-        else:
-            l2_normalizer = lambda x: F.normalize(x, dim=1) 
 
         # get the representations and the projections
         zis = model(xis)  # [N,C]
@@ -55,13 +60,13 @@ class SimCLRTrainer(object):
         zjs = model(xjs)  # [N,C]
 
         # normalize projection feature vectors
-        zis = l2_normalizer(zis)
-        zjs = l2_normalizer(zjs)
+        zis = self.l2_normalizer(zis)
+        zjs = self.l2_normalizer(zjs)
 
         if xs is not None:
             # Unaugmented datapoint. 
             zs = model(xs)
-            zs = l2_normalizer(zs)
+            zs = self.l2_normalizer(zs)
         else:
             zs = None
 

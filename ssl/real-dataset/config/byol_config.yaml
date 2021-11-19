@@ -65,7 +65,7 @@ trainer:
     exact_cov: false
     exact_cov_unaug_sim: false
 
-  use_customized_l2: false
+  l2_reg_type: regular
 
   grad_combination_margin: null
 
