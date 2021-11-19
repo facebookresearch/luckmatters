@@ -65,6 +65,8 @@ trainer:
     exact_cov: false
     exact_cov_unaug_sim: false
 
+  use_customized_l2: false
+
   grad_combination_margin: null
 
   # Can be symmetric, diagonal, onehalfeig, symmetric_norm, solve, minimal_space, corr, directcopy

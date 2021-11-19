@@ -14,6 +14,20 @@ import numpy as np
 import logging
 log = logging.getLogger(__file__)
 
+# customized l2 normalization
+class SpecializedL2Regularizer(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        assert input.size() == 2
+        l2_norms = input.pow(2).sum(dim=1, keepdim=True).sqrt().add(1e-8)
+        ctx.l2_norms = l2_norms
+        return input / l2_norms
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_input = grad_output / ctx.l2_norms
+        return grad_input
+
 class SimCLRTrainer(object):
     def __init__(self, log_dir, model, optimizer, evaluator, device, params):
         self.model = model
@@ -26,6 +40,10 @@ class SimCLRTrainer(object):
         self.nt_xent_criterion = NTXentLoss(self.device, params['batch_size'], **params['nce_loss'])
 
     def _step(self, model, xis, xjs, xs, n_iter):
+        if self.params["use_customized_l2"]:
+            l2_normalizer = SpecializedL2Regularizer.apply
+        else:
+            l2_normalizer = lambda x: F.normalize(x, dim=1) 
 
         # get the representations and the projections
         zis = model(xis)  # [N,C]
@@ -34,13 +52,13 @@ class SimCLRTrainer(object):
         zjs = model(xjs)  # [N,C]
 
         # normalize projection feature vectors
-        zis = F.normalize(zis, dim=1)
-        zjs = F.normalize(zjs, dim=1)
+        zis = l2_normalizer(zis)
+        zjs = l2_normalizer(zjs)
 
         if xs is not None:
             # Unaugmented datapoint. 
             zs = model(xs)
-            zs = F.normalize(zs, dim=1)
+            zs = l2_normalizer(zs)
         else:
             zs = None
 
