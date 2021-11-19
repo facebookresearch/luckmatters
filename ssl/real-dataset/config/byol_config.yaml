@@ -19,7 +19,7 @@ method: byol
 
 trainer:
   batch_size: 128
-  save_per_epoch: 5
+  save_per_epoch: 20
   m: 0.996 # momentum update
   # simply divide 
   checkpoint_interval: 5000
