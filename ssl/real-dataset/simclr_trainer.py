@@ -18,7 +18,7 @@ log = logging.getLogger(__file__)
 class SpecializedL2Regularizer(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input):
-        assert input.size() == 2
+        assert len(input.size()) == 2
         l2_norms = input.pow(2).sum(dim=1, keepdim=True).sqrt().add(1e-8)
         ctx.l2_norms = l2_norms
         return input / l2_norms
@@ -38,6 +38,9 @@ class SimCLRTrainer(object):
         self.writer = SummaryWriter(log_dir)
         self.params = params
         self.nt_xent_criterion = NTXentLoss(self.device, params['batch_size'], **params['nce_loss'])
+
+        if self.params["use_customized_l2"]:
+            log.info("SimCLRTrainer: use_customized_l2")
 
     def _step(self, model, xis, xjs, xs, n_iter):
         if self.params["use_customized_l2"]:
