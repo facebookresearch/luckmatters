@@ -8,13 +8,14 @@ import logging
 log = logging.getLogger(__file__)
 
 # Customized BatchNorm
-class BatchNorm2dNoProj(nn.Module):
-    def __init__(self, num_features, eps=1e-5, momentum=0.1):
-        super(BatchNorm2dNoProj, self).__init__()
+class BatchNorm2dExt(nn.Module):
+    def __init__(self, num_features, eps=1e-5, momentum=0.1, backprop_mean_var=True):
+        super(BatchNorm2dExt, self).__init__()
 
         self.num_features = num_features
         self.eps = eps
         self.momentum = momentum
+        self.backprop_mean_var = backprop_mean_var
 
         # Tracking stats
         self.register_buffer("running_mean", torch.zeros(num_features))
@@ -25,13 +26,17 @@ class BatchNorm2dNoProj(nn.Module):
 
         if self.training: 
             # Note the detach() here. Standard BN also needs to backprop through mean/var, creating projection matrix in the Jakobian
-            this_mean = x.mean(dim=(0,2,3)).detach()
-            this_var = x.var(dim=(0,2,3), unbiased=False).detach()
+            this_mean = x.mean(dim=(0,2,3))
+            this_var = x.var(dim=(0,2,3), unbiased=False)
+
+            if not self.backprop_mean_var:
+                this_mean = this_mean.detach()
+                this_var = this_var.detach()
             
             x = (x - this_mean[None,:,None,None]) / (this_var[None,:,None,None] + self.eps).sqrt()
             # Tracking stats
-            self.running_mean = (1 - self.momentum) * self.running_mean + self.momentum * this_mean
-            self.running_var = (1 - self.momentum) * self.running_var + self.momentum * this_var
+            self.running_mean = (1 - self.momentum) * self.running_mean + self.momentum * this_mean.detach()
+            self.running_var = (1 - self.momentum) * self.running_var + self.momentum * this_var.detach()
         else:
             # Just use current running_mean/var
             x = (x - self.running_mean[None,:,None,None]) / (self.running_var[None,:,None,None] + self.eps).sqrt()
@@ -54,8 +59,11 @@ class ExtendedBasicBlock(nn.Module):
             self.bn1 = nn.BatchNorm2d(self.bn1.weight.size(0), self.bn1.eps, self.bn1.momentum, affine=False)
             self.bn2 = nn.BatchNorm2d(self.bn2.weight.size(0), self.bn2.eps, self.bn2.momentum, affine=False)
         elif bn_variant == "no_proj":
-            self.bn1 = BatchNorm2dNoProj(self.bn1.weight.size(0), self.bn1.eps, self.bn1.momentum)
-            self.bn2 = BatchNorm2dNoProj(self.bn2.weight.size(0), self.bn2.eps, self.bn2.momentum)
+            self.bn1 = BatchNorm2dExt(self.bn1.weight.size(0), self.bn1.eps, self.bn1.momentum, backprop_mean_var=False)
+            self.bn2 = BatchNorm2dExt(self.bn2.weight.size(0), self.bn2.eps, self.bn2.momentum, backprop_mean_var=False)
+        elif bn_variant == "no_affine_custom":
+            self.bn1 = BatchNorm2dExt(self.bn1.weight.size(0), self.bn1.eps, self.bn1.momentum, backprop_mean_var=True)
+            self.bn2 = BatchNorm2dExt(self.bn2.weight.size(0), self.bn2.eps, self.bn2.momentum, backprop_mean_var=True)
         elif bn_variant == "regular":
             pass
         else:

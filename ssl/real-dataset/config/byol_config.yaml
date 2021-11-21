@@ -4,7 +4,7 @@ network:
   bn_spec: 
     enable_bn1: True
     enable_bn2: True
-    bn_variant: regular # either regular/no_affine/no_proj
+    bn_variant: regular # either regular/no_affine/no_proj/no_affine_custom
 
   projection_head:
     mlp_hidden_size: 512
