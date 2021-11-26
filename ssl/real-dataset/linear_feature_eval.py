@@ -198,7 +198,7 @@ def linear_eval(dataset, dataset_path, batch_size, exp_name_list, load_epoch_lis
 
 
 
-@hydra.main("config/byol_config.yaml", strict=True)
+@hydra.main("config/byol_config.yaml")
 def main(args):
     # root_dir = '/private/home/lantaoyu1/projects/PyTorch-BYOL/runs_09_03'
     # root_dir = '/checkpoint/lantaoyu1/PyTorch-BYOL/runs'

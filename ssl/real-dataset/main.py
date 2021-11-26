@@ -3,6 +3,7 @@ import sys
 
 import torch
 import yaml
+from omegaconf import OmegaConf
 from torchvision import datasets
 from data.multi_view_data_injector import MultiViewDataInjector
 from data.transforms import get_simclr_data_transforms_train, get_simclr_data_transforms_test
@@ -31,7 +32,7 @@ def hydra2dict(args):
 
     return args
 
-@hydra.main("config/byol_config.yaml")
+@hydra.main(config_path="config", config_name="byol_config.yaml")
 def main(args):
     log.info("Command line: \n\n" + common_utils.pretty_print_cmd(sys.argv))
     log.info(f"Working dir: {os.getcwd()}")
@@ -40,7 +41,7 @@ def main(args):
 
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{args.gpu}"
     torch.manual_seed(args.seed)
-    log.info(args.pretty())
+    log.info(OmegaConf.to_yaml(args))
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     log.info(f"Training with: {device}")
