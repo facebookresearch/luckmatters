@@ -66,7 +66,7 @@ trainer:
     use_cosine_similarity: True
     beta: 0
     add_one_in_neg: false
-    exact_cov: false
+    loss_type: default
     exact_cov_unaug_sim: false
 
   l2_reg_type: regular

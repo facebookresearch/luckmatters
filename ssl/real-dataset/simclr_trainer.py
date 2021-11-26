@@ -37,7 +37,7 @@ class SimCLRTrainer(object):
         self.evaluator = evaluator
         self.writer = SummaryWriter(log_dir)
         self.params = params
-        self.nt_xent_criterion = NTXentLoss(self.device, params['batch_size'], **params['nce_loss'])
+        self.nt_xent_criterion = NTXentLoss(self.device, params['batch_size'], params['nce_loss'])
 
         l2_reg_type = self.params['l2_reg_type']
         log.info(f"SimCLRTrainer: l2_reg_type: {l2_reg_type}")
