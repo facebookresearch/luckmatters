@@ -1,0 +1,21 @@
+N: 1000
+batchsize: 128
+T: 0.1
+multi: 10
+d: 10
+d2: 20
+
+w1_bias: false 
+use_l2: true
+
+niter: 5000
+
+bn_spec:
+  use_bn: true
+  backprop_mean: true
+  backprop_var: true
+
+opt:
+  lr: 0.01
+  momentum: 0.9
+  wd: 5e-3
