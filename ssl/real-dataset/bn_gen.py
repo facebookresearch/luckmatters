@@ -4,35 +4,69 @@ import sys
 import hydra
 import os
 import torch.nn as nn
+from collections import Counter, defaultdict
 
-sys.path.append("../")
 import common_utils
 
 import logging
 log = logging.getLogger(__file__)
 
+def gen_distribution(distri):
+    # Generate the distribution. 
+    tokens_per_loc = []
+    token_indices = list(range(distri.num_tokens))
+    for i in range(distri.num_loc):
+        # For each location, pick tokens. 
+        random.shuffle(token_indices)
+        tokens_per_loc.append(token_indices[:distri.num_tokens_per_pos])
+
+    distributions = []
+    loc_indices = list(range(distri.num_loc))
+    for i in range(distri.pattern_cnt):
+        # pick locations.
+        random.shuffle(loc_indices)
+
+        pattern = [-1] * distri.num_loc
+        # for each loc, pick which token to choose. 
+        for l in loc_indices[:distri.pattern_len]:
+            pattern[l] = random.choice(tokens_per_loc[l])
+
+        distributions.append(pattern)
+
+    return distributions
+
 class Generator:
-    def __init__(self, distrib, symbols):
+    def __init__(self, distrib, num_symbols):
+        '''
+        -1 = wildcard
+
+        distrib = [
+            [0, 1, -1, -1, 3], 
+            [-1, -1, 1, 4, 2]
+        ]
+        '''
+
         self.distrib = distrib
         self.K = len(self.distrib[0])
         
-        self.symbols = symbols
-        self.symbol_keys = list(self.symbols.keys())
-        self.d = len(self.symbols[self.symbol_keys[0]])
+        self.num_symbols = num_symbols
+        # i-th column is the embedding for i-th symbol. 
+        self.symbol_embedding = torch.eye(self.num_symbols)
+        self.d = self.num_symbols
         
     def _ground_symbol(self, a):
-        # replace any * in token with any symbols.
-        return a if a != '*' else self.symbol_keys[random.randint(0, len(self.symbols) - 1)]
+        # replace any wildcard in token with any symbols.
+        return a if a != -1 else random.randint(0, self.num_symbols - 1)
     
     def _ground_tokens(self, tokens):
-        return [ "".join([self._ground_symbol(a) for a in token]) for token in tokens ]
+        return [ [self._ground_symbol(a) for a in token] for token in tokens ]
     
     def _symbol2embedding(self, tokens):
         # From symbols to embedding. 
-        x = torch.FloatTensor(len(tokens), self.K, self.d)
+        x = torch.FloatTensor(len(tokens), self.K, self.symbol_embedding.size(0))
         for i, token in enumerate(tokens):
             for j, a in enumerate(token):
-                x[i, j, :] = torch.FloatTensor(self.symbols[a])
+                x[i, j, :] = self.symbol_embedding[:, a]
         return x
     
     def sample(self, n):
@@ -136,31 +170,10 @@ def main(args):
     log.info("\n" + common_utils.get_git_hash())
     log.info("\n" + common_utils.get_git_diffs())
 
-    # define a few symbols, each with a unique embedding. 
-    # Then we can combine them together and train the model. 
-    symbols = {
-        "A": [1, 0, 0, 0, 0, 0, 0, 0],
-        "B": [0, 1, 0, 0, 0, 0, 0, 0],
-        "C": [0, 0, 1, 0, 0, 0, 0, 0],
-        "D": [0, 0, 0, 1, 0, 0, 0, 0],
-        "E": [0, 0, 0, 0, 1, 0, 0, 0],
-        "F": [0, 0, 0, 0, 0, 1, 0, 0],
-        "G": [0, 0, 0, 0, 0, 0, 1, 0],
-        "H": [0, 0, 0, 0, 0, 0, 0, 1],
-    }
-
-    # Data distribution: "AA**" means that the pattern is AA at the beginning, followed by other random patterns.
-    #distributions = [ "AB***", "*BC**", "**CDE", "A****" ]
-    #distributions = [ "A****", "*B***", "**CDE"]
-    distributions = [ "CA***", "*BC**", "C**DA", "C*E**" ]
-    #distributions = [ "ABC**", "*ABC*", "**ABC" ]
-    #distributions = [ "ABC**", "*ABC*" ]
-
-    # Note that in multiple patterns, A appears at location 0, B appears at location 2, and E appears at location 4
-
-    gen = Generator(distributions, symbols)
+    distributions = gen_distribution(args.distri)
+    gen = Generator(distributions, args.distri.num_tokens)
         
-    model = Model(gen.d, gen.K, args.d2, args.w1_bias, bn_spec=args.bn_spec, multi=args.multi)
+    model = Model(gen.d, gen.K, args.output_d, args.w1_bias, bn_spec=args.bn_spec, multi=args.multi)
     loss_func = nn.CrossEntropyLoss()
     label = torch.LongTensor(range(args.batchsize))
 
@@ -207,3 +220,50 @@ def main(args):
 
 if __name__ == '__main__':
     main()
+
+def _check_result(subfolder, args):
+    model = torch.load(os.path.join(subfolder, "model-final.pth"))
+
+    distributions = [ "CA***", "*BC**", "C**DA", "C*E**" ]
+
+    counts = defaultdict(Counter)
+
+    for dist in distributions:
+        for k, d in enumerate(dist):
+            counts[k][d] += 1
+
+    res = {
+        "folder": subfolder,
+        "modified_since": 0
+    }
+
+    all_means = []
+    topk = 1
+    for k in range(model.K):
+        means = []
+        for key in counts[k].keys():
+            if key == "*":
+                continue
+            idx = ord(key) - ord('A')
+            w = model.w1[k].weight.detach()
+            w_norm = w.norm(dim=1)
+            energy_ratio = w[:,idx] / (w_norm + w.abs().max() / 1000)
+            sorted_ratio, _ = energy_ratio.sort(descending=True)
+            # top-3 average. 
+            means.append(sorted_ratio[:topk].mean().item())
+
+        res[f"loc{k}"] = this_mean = torch.FloatTensor(means).mean().item()
+        all_means.append(this_mean)
+    
+    res["loc_all"] = torch.FloatTensor(all_means).mean().item()
+
+        # print(f"{key}/{idx}: ratio: {}")
+        # plt.imshow(model.w1[k].weight.detach().numpy())
+        # plt.title(f"Weight at position {k}")
+        # print(model.w1[k].weight)
+        # plt.show()
+        # print(model.w1[i].weight.norm(dim=1))
+
+    # print(model.w2.weight)
+    # return a list of dict
+    return [ res ]

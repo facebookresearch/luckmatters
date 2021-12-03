@@ -2,8 +2,29 @@ N: 1000
 batchsize: 128
 T: 0.1
 multi: 10
-d: 10
-d2: 20
+
+# output dimension of second layer (right before contrastive learning)
+output_d: 20
+
+# Data distribution: "AA**" means that the pattern is AA at the beginning, followed by other random patterns.
+#distributions = [ "AB***", "*BC**", "**CDE", "A****" ]
+#distributions = [ "A****", "*B***", "**CDE"]
+#distributions = [ "CA***", "*BC**", "C**DA", "C*E**" ]
+#distributions = [ "ABC**", "*ABC*", "**ABC" ]
+#distributions = [ "ABC**", "*ABC*" ]
+distri:
+  specific: null # "CA***-*BC**-C**DA-C*E**"
+  # Number of locations. E.g., for CA***, num_loc = 5
+  num_loc: 10
+  # Number of tokens at each location, e.g., 8 = ABCDEFGH
+  # The dimension of the embedding for now is the same as num_tokens 
+  num_tokens: 8
+  # Number of tokens allowed at each location.  
+  num_tokens_per_pos: 2
+
+  # For pattern [ "CA***", "*BC**", "C**DA", "C*E**" ], we have pattern_cnt = 4, pattern_len = 5
+  pattern_cnt: 10 
+  pattern_len: 5
 
 w1_bias: false 
 use_l2: true
