@@ -6,6 +6,7 @@ import os
 import torch.nn as nn
 from collections import Counter, defaultdict
 
+import torch.nn.functional as F
 import common_utils
 
 import logging
@@ -79,6 +80,19 @@ class Generator:
                 
         return x1, x2, ground_tokens1, ground_tokens2
     
+# customized l2 normalization
+class SpecializedL2Regularizer(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        assert len(input.size()) == 2
+        l2_norms = input.pow(2).sum(dim=1, keepdim=True).sqrt().add(1e-8)
+        ctx.l2_norms = l2_norms
+        return input / l2_norms
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_input = grad_output / ctx.l2_norms
+        return grad_input
 
 # Gradient descent with multiple symbols in 2 layered ReLU networks. 
 
@@ -169,6 +183,8 @@ def main(args):
     log.info(f"Working dir: {os.getcwd()}")
     log.info("\n" + common_utils.get_git_hash())
     log.info("\n" + common_utils.get_git_diffs())
+    common_utils.set_all_seeds(args.seed)
+    log.info(common_utils.pretty_print_args(args))
 
     distributions = gen_distribution(args.distri)
     gen = Generator(distributions, args.distri.num_tokens)
@@ -179,6 +195,15 @@ def main(args):
 
     optimizer = torch.optim.SGD(model.parameters(), lr=args.opt.lr, momentum=args.opt.momentum, weight_decay=args.opt.wd)
 
+    if args.l2_type == "regular":
+        l2_reg = lambda x: F.normalize(x, dim=1) 
+    elif args.l2_type == "no_proj":
+        l2_reg = SpecializedL2Regularizer.apply
+    elif args.l2_type == "no_l2":
+        l2_reg = lambda x: x
+    else:
+        raise RuntimeError(f"Unknown l2_type = {args.l2_type}")
+
     for t in range(args.niter):
         optimizer.zero_grad()
         
@@ -188,16 +213,15 @@ def main(args):
         z2 = model(x2)
         # #batch x output_dim
         # Then we compute the infoNCE. 
-        if args.use_l2:
-            z1 = z1 / z1.norm(dim=1, keepdim=True)
-            z2 = z2 / z2.norm(dim=1, keepdim=True)
-            # nbatch x nbatch, minus pairwise distance, or inner_prod matrix. 
-            M = z1 @ z1.t()
-            M[label,label] = (z1 * z2).sum(dim=1)
-        else:    
-            M = -pairwise_dist(z1)
-            aug_dist = (z1 - z2).pow(2).sum(1)
-            M[label, label] = -aug_dist
+        z1 = l2_reg(z1)
+        z2 = l2_reg(z2)
+        # nbatch x nbatch, minus pairwise distance, or inner_prod matrix. 
+        M = z1 @ z1.t()
+        M[label,label] = (z1 * z2).sum(dim=1)
+
+        #     M = -pairwise_dist(z1)
+        #     aug_dist = (z1 - z2).pow(2).sum(1)
+        #     M[label, label] = -aug_dist
         
         loss = loss_func(M / args.T, label)
         if t % 500 == 0:
@@ -207,7 +231,7 @@ def main(args):
 
             model_name = f"model-{t}.pth" 
             log.info(f"Save to {model_name}")
-            torch.save(model, model_name)
+            torch.save(model.state_dict(), model_name)
 
         loss.backward()
         
@@ -216,21 +240,21 @@ def main(args):
     log.info(f"Final loss = {loss.item()}")
 
     log.info(f"Save to model-final.pth")
-    torch.save(model, "model-final.pth")
+    torch.save(model.state_dict(), "model-final.pth")
+    torch.save(distributions, "distributions.pth")
 
-if __name__ == '__main__':
-    main()
+    log.info(_check_result("./", None))
 
 def _check_result(subfolder, args):
     model = torch.load(os.path.join(subfolder, "model-final.pth"))
-
-    distributions = [ "CA***", "*BC**", "C**DA", "C*E**" ]
+    distributions = torch.load(os.path.join(subfolder, "distributions.pth"))
 
     counts = defaultdict(Counter)
 
-    for dist in distributions:
-        for k, d in enumerate(dist):
+    for pattern in distributions:
+        for k, d in enumerate(pattern):
             counts[k][d] += 1
+    K = len(counts)
 
     res = {
         "folder": subfolder,
@@ -239,14 +263,14 @@ def _check_result(subfolder, args):
 
     all_means = []
     topk = 1
-    for k in range(model.K):
+    for k in range(K):
+        w = model[f"w1.{k}.weight"].detach()
+        w_norm = w.norm(dim=1)
+
         means = []
-        for key in counts[k].keys():
-            if key == "*":
+        for idx in counts[k].keys():
+            if idx == -1:
                 continue
-            idx = ord(key) - ord('A')
-            w = model.w1[k].weight.detach()
-            w_norm = w.norm(dim=1)
             energy_ratio = w[:,idx] / (w_norm + w.abs().max() / 1000)
             sorted_ratio, _ = energy_ratio.sort(descending=True)
             # top-3 average. 
@@ -267,3 +291,6 @@ def _check_result(subfolder, args):
     # print(model.w2.weight)
     # return a list of dict
     return [ res ]
+
+if __name__ == '__main__':
+    main()

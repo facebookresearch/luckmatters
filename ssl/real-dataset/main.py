@@ -15,8 +15,6 @@ import argparse
 import os
 import hydra
 from linear_feature_eval import linear_eval, Evaluator
-
-sys.path.append("../")
 import common_utils
 
 import logging
@@ -41,7 +39,7 @@ def main(args):
 
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{args.gpu}"
     torch.manual_seed(args.seed)
-    log.info(OmegaConf.to_yaml(args))
+    log.info(common_utils.pretty_print_args(args))
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     log.info(f"Training with: {device}")

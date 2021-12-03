@@ -2,6 +2,7 @@ N: 1000
 batchsize: 128
 T: 0.1
 multi: 10
+seed: 1
 
 # output dimension of second layer (right before contrastive learning)
 output_d: 20
@@ -27,7 +28,7 @@ distri:
   pattern_len: 5
 
 w1_bias: false 
-use_l2: true
+l2_type: regular
 
 niter: 5000
 
