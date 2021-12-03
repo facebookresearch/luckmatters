@@ -176,6 +176,57 @@ def pairwise_dist(x):
     norms = x.pow(2).sum(dim=1)
     return norms[:,None] + norms[None,:] - 2 * (x @ x.t())
 
+def check_result(subfolder):
+    model = torch.load(os.path.join(subfolder, "model-final.pth"))
+    distributions = torch.load(os.path.join(subfolder, "distributions.pth"))
+
+    counts = defaultdict(Counter)
+
+    for pattern in distributions:
+        for k, d in enumerate(pattern):
+            counts[k][d] += 1
+    K = len(counts)
+
+    res = {
+        "folder": subfolder,
+        "modified_since": 0
+    }
+
+    all_means = []
+    topk = 1
+    for k in range(K):
+        w = model[f"w1.{k}.weight"].detach()
+        w_norm = w.norm(dim=1)
+
+        means = []
+        for idx in counts[k].keys():
+            if idx == -1:
+                continue
+            energy_ratio = w[:,idx] / (w_norm + w.abs().max() / 1000)
+            sorted_ratio, _ = energy_ratio.sort(descending=True)
+            # top-3 average. 
+            means.append(sorted_ratio[:topk].mean().item())
+
+        res[f"loc{k}"] = this_mean = torch.FloatTensor(means).mean().item()
+        all_means.append(this_mean)
+    
+    res["loc_all"] = torch.FloatTensor(all_means).mean().item()
+
+        # print(f"{key}/{idx}: ratio: {}")
+        # plt.imshow(model.w1[k].weight.detach().numpy())
+        # plt.title(f"Weight at position {k}")
+        # print(model.w1[k].weight)
+        # plt.show()
+        # print(model.w1[i].weight.norm(dim=1))
+
+    # print(model.w2.weight)
+    # return a list of dict
+    return [ res ]
+
+_attr_multirun = {
+    "check_result": check_result
+}
+
 
 @hydra.main(config_path="config", config_name="bn_gen.yaml")
 def main(args):
@@ -243,54 +294,8 @@ def main(args):
     torch.save(model.state_dict(), "model-final.pth")
     torch.save(distributions, "distributions.pth")
 
-    log.info(_check_result("./", None))
+    log.info(_check_result(os.path.abspath("./"), None))
 
-def _check_result(subfolder, args):
-    model = torch.load(os.path.join(subfolder, "model-final.pth"))
-    distributions = torch.load(os.path.join(subfolder, "distributions.pth"))
-
-    counts = defaultdict(Counter)
-
-    for pattern in distributions:
-        for k, d in enumerate(pattern):
-            counts[k][d] += 1
-    K = len(counts)
-
-    res = {
-        "folder": subfolder,
-        "modified_since": 0
-    }
-
-    all_means = []
-    topk = 1
-    for k in range(K):
-        w = model[f"w1.{k}.weight"].detach()
-        w_norm = w.norm(dim=1)
-
-        means = []
-        for idx in counts[k].keys():
-            if idx == -1:
-                continue
-            energy_ratio = w[:,idx] / (w_norm + w.abs().max() / 1000)
-            sorted_ratio, _ = energy_ratio.sort(descending=True)
-            # top-3 average. 
-            means.append(sorted_ratio[:topk].mean().item())
-
-        res[f"loc{k}"] = this_mean = torch.FloatTensor(means).mean().item()
-        all_means.append(this_mean)
-    
-    res["loc_all"] = torch.FloatTensor(all_means).mean().item()
-
-        # print(f"{key}/{idx}: ratio: {}")
-        # plt.imshow(model.w1[k].weight.detach().numpy())
-        # plt.title(f"Weight at position {k}")
-        # print(model.w1[k].weight)
-        # plt.show()
-        # print(model.w1[i].weight.norm(dim=1))
-
-    # print(model.w2.weight)
-    # return a list of dict
-    return [ res ]
 
 if __name__ == '__main__':
     main()

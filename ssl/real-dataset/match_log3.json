@@ -1,8 +1,0 @@
-[
-  {
-    "match": "Epoch (\\d+): best_acc: ([\\d\\.]+)",
-    "action": [
-      [ "\"acc\"", "float(m.group(2))" ]
-    ]
-  }
-]
