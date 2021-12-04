@@ -4,9 +4,10 @@ import sys
 import hydra
 import os
 import torch.nn as nn
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 
 import torch.nn.functional as F
+import glob
 import common_utils
 
 import logging
@@ -187,7 +188,12 @@ def pairwise_dist(x):
     return norms[:,None] + norms[None,:] - 2 * (x @ x.t())
 
 def check_result(subfolder):
-    model = torch.load(os.path.join(subfolder, "model-final.pth"))
+    model_files = glob.glob(os.path.join(subfolder, "model-*.pth"))
+    # Find the latest.
+    model_files = [ (os.path.getmtime(f), f) for f in model_files ]
+    model_file = sorted(model_files, key=lambda x: -x[0])[0][1]
+    
+    model = torch.load(model_file)
     distributions = torch.load(os.path.join(subfolder, "distributions.pth"))
     config = common_utils.MultiRunUtil.load_full_cfg(subfolder)
 
@@ -237,18 +243,14 @@ def check_result(subfolder):
     return [ res ]
 
 _attr_multirun = {
-    "check_result": check_result
+    "check_result": check_result,
+    "metric_info": lambda _: dict(descending=True, topk_mean=1, topk=10) 
 }
-
 
 @hydra.main(config_path="config", config_name="bn_gen.yaml")
 def main(args):
-    log.info("Command line: \n\n" + common_utils.pretty_print_cmd(sys.argv))
-    log.info(f"Working dir: {os.getcwd()}")
-    log.info("\n" + common_utils.get_git_hash())
-    log.info("\n" + common_utils.get_git_diffs())
+    log.info(common_utils.print_info(args))
     common_utils.set_all_seeds(args.seed)
-    log.info(common_utils.pretty_print_args(args))
 
     distributions = gen_distribution(args.distri)
     mags = torch.rand(args.distri.num_tokens)*3 + 1
@@ -258,7 +260,15 @@ def main(args):
     gen = Generator(distributions, mags)
         
     model = Model(gen.d, gen.K, args.output_d, w1_bias=args.w1_bias, activation=args.activation, bn_spec=args.bn_spec, multi=args.multi)
-    loss_func = nn.CrossEntropyLoss()
+
+    if args.loss_type == "infoNCE":
+        loss_func = nn.CrossEntropyLoss()
+    elif args.loss_type == "quadratic":
+        # Quadratic loss
+        loss_func = lambda x, label: - (1 + 1 / x.size(0)) * x[torch.LongTensor(range(x.size(0))),label].mean() + x.mean() 
+    else:
+        raise RuntimeError(f"Unknown loss_type = {loss_type}")
+
     label = torch.LongTensor(range(args.batchsize))
 
     optimizer = torch.optim.SGD(model.parameters(), lr=args.opt.lr, momentum=args.opt.momentum, weight_decay=args.opt.wd)
@@ -271,6 +281,8 @@ def main(args):
         l2_reg = lambda x: x
     else:
         raise RuntimeError(f"Unknown l2_type = {args.l2_type}")
+
+    model_q = deque([model.clone()])
 
     for t in range(args.niter):
         optimizer.zero_grad()
@@ -292,11 +304,13 @@ def main(args):
         #     M[label, label] = -aug_dist
         
         loss = loss_func(M / args.T, label)
+        if torch.any(loss.isnan()):
+            log.info("Encounter NaN!")
+            model = model_q.popleft()
+            break
+
         if t % 500 == 0:
             log.info(f"[{t}] {loss.item()}")
-            if torch.any(loss.isnan()):
-                break
-
             model_name = f"model-{t}.pth" 
             log.info(f"Save to {model_name}")
             torch.save(model.state_dict(), model_name)
@@ -304,11 +318,15 @@ def main(args):
         loss.backward()
         
         optimizer.step()
+
+        model_q.append(model.clone())
+        if len(model_q) >= 3:
+            model_q.popleft()
         
     log.info(f"Final loss = {loss.item()}")
-
     log.info(f"Save to model-final.pth")
     torch.save(model.state_dict(), "model-final.pth")
+
     torch.save(distributions, "distributions.pth")
 
     log.info(check_result(os.path.abspath("./")))
