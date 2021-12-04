@@ -33,6 +33,7 @@ loss_type: infoNCE
 activation: relu
 
 similarity: dotprod # or negdist
+per_layer_normalize: false
 
 niter: 5000
 

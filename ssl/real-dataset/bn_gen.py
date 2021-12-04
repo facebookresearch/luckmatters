@@ -163,6 +163,18 @@ class Model(nn.Module):
             self.bn = BatchNormExt(K * self.multi, backprop_mean=self.bn_spec.backprop_mean, backprop_var=self.bn_spec.backprop_var)
         else:
             self.bn = None
+
+    def per_layer_normalize(self):
+        with torch.no_grad():
+            max_norm = 0
+            for w in self.w1:
+                max_norm = max(max_norm, w.weight.norm())
+
+            for w in self.w1:
+                w.weight[:] /= max_norm
+                if w.bias is not None:
+                    w.bias[:] /= max_norm
+            self.w2.weight[:] /= self.w2.weight.norm()
     
     def forward(self, x):
         # x: #batch x K x d
@@ -221,7 +233,7 @@ def check_result(subfolder):
         for idx in counts[k].keys():
             if idx == -1:
                 continue
-            energy_ratio = w[:,idx] / (w_norm + w.abs().max() / 1000)
+            energy_ratio = w[:,idx] / (w_norm + max(w.abs().max() / 1000, 1e-6))
             if config["activation"] == "linear":
                 energy_ratio = energy_ratio.abs()
             sorted_ratio, _ = energy_ratio.sort(descending=True)
@@ -327,6 +339,10 @@ def main(args):
         loss.backward()
         
         optimizer.step()
+
+        # normalization
+        if args.per_layer_normalize:
+            model.per_layer_normalize()
 
         model_q.append(deepcopy(model))
         if len(model_q) >= 3:
