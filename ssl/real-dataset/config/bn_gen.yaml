@@ -4,6 +4,8 @@ T: 0.1
 multi: 10
 seed: 1
 
+activation: relu
+
 # output dimension of second layer (right before contrastive learning)
 output_d: 20
 

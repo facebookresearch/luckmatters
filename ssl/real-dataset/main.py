@@ -30,19 +30,6 @@ def hydra2dict(args):
 
     return args
 
-_result_matcher = [
-  {
-    "match": re.compile(r"Epoch (\d+): best_acc: ([\d\.]+)"),
-    "action": [
-      [ "acc", "float(m.group(2))" ]
-    ]
-  }
-]
-
-_attr_multirun = {
-    "check_result": lambda x: common_utils.MultiRunUtil.load_regex(x, _result_matcher)
-}
-
 @hydra.main(config_path="config", config_name="byol_config.yaml")
 def main(args):
     log.info("Command line: \n\n" + common_utils.pretty_print_cmd(sys.argv))

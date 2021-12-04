@@ -13,6 +13,9 @@ import logging
 log = logging.getLogger(__file__)
 
 def gen_distribution(distri):
+    if distri.specific is not None:
+        return [ [ord(t) - ord('A') if t != '*' else -1 for t in v] for v in distri.specific.split("-") ]
+
     # Generate the distribution. 
     tokens_per_loc = []
     token_indices = list(range(distri.num_tokens))
@@ -37,7 +40,7 @@ def gen_distribution(distri):
     return distributions
 
 class Generator:
-    def __init__(self, distrib, num_symbols):
+    def __init__(self, distrib, magnitudes):
         '''
         -1 = wildcard
 
@@ -50,9 +53,9 @@ class Generator:
         self.distrib = distrib
         self.K = len(self.distrib[0])
         
-        self.num_symbols = num_symbols
+        self.num_symbols = magnitudes.size(0)
         # i-th column is the embedding for i-th symbol. 
-        self.symbol_embedding = torch.eye(self.num_symbols)
+        self.symbol_embedding = magnitudes.diag() #torch.eye(self.num_symbols)
         self.d = self.num_symbols
         
     def _ground_symbol(self, a):
@@ -136,12 +139,19 @@ class BatchNormExt(nn.Module):
         return x
 
 class Model(nn.Module):
-    def __init__(self, d, K, d2, w1_bias=False, bn_spec=None, multi=5):
+    def __init__(self, d, K, d2, activation="relu", w1_bias=False, bn_spec=None, multi=5):
         super(Model, self).__init__()
         self.multi = multi
         # d = dimension, K = number of filters. 
         self.w1 = nn.ModuleList([nn.Linear(d, self.multi, bias=w1_bias) for _ in range(K)])
-        self.relu = nn.ReLU()
+        
+        if activation == "relu":
+            self.activation = nn.ReLU()
+        elif activation == "linear":
+            self.activation = lambda x : x
+        else:
+            raise RuntimeError(f"Unknown activation {activation}")
+
         self.K = K
         self.w2 = nn.Linear(K * self.multi, d2, bias=False)
 
@@ -162,7 +172,7 @@ class Model(nn.Module):
         y = y.permute(1, 0, 2).squeeze()
         
         # y: #batch x K x self.multi
-        y = self.relu(y).reshape(x.size(0), -1)
+        y = self.activation(y).reshape(x.size(0), -1)
         # print(y.size())
         
         if self.bn is not None:
@@ -179,6 +189,7 @@ def pairwise_dist(x):
 def check_result(subfolder):
     model = torch.load(os.path.join(subfolder, "model-final.pth"))
     distributions = torch.load(os.path.join(subfolder, "distributions.pth"))
+    config = common_utils.MultiRunUtil.load_full_cfg(subfolder)
 
     counts = defaultdict(Counter)
 
@@ -203,6 +214,8 @@ def check_result(subfolder):
             if idx == -1:
                 continue
             energy_ratio = w[:,idx] / (w_norm + w.abs().max() / 1000)
+            if config["activation"] == "linear":
+                energy_ratio = energy_ratio.abs()
             sorted_ratio, _ = energy_ratio.sort(descending=True)
             # top-3 average. 
             means.append(sorted_ratio[:topk].mean().item())
@@ -238,9 +251,13 @@ def main(args):
     log.info(common_utils.pretty_print_args(args))
 
     distributions = gen_distribution(args.distri)
-    gen = Generator(distributions, args.distri.num_tokens)
+    mags = torch.rand(args.distri.num_tokens)*3 + 1
+    log.info(f"mags: {mags}")
+    log.info(f"distributions: {distributions}")
+
+    gen = Generator(distributions, mags)
         
-    model = Model(gen.d, gen.K, args.output_d, args.w1_bias, bn_spec=args.bn_spec, multi=args.multi)
+    model = Model(gen.d, gen.K, args.output_d, w1_bias=args.w1_bias, activation=args.activation, bn_spec=args.bn_spec, multi=args.multi)
     loss_func = nn.CrossEntropyLoss()
     label = torch.LongTensor(range(args.batchsize))
 
@@ -294,7 +311,7 @@ def main(args):
     torch.save(model.state_dict(), "model-final.pth")
     torch.save(distributions, "distributions.pth")
 
-    log.info(_check_result(os.path.abspath("./"), None))
+    log.info(check_result(os.path.abspath("./")))
 
 
 if __name__ == '__main__':
