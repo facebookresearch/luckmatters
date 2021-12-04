@@ -6,6 +6,8 @@ import os
 import torch.nn as nn
 from collections import Counter, defaultdict, deque
 
+from copy import deepcopy
+
 import torch.nn.functional as F
 import glob
 import common_utils
@@ -282,7 +284,7 @@ def main(args):
     else:
         raise RuntimeError(f"Unknown l2_type = {args.l2_type}")
 
-    model_q = deque([model.clone()])
+    model_q = deque([deepcopy(model)])
 
     for t in range(args.niter):
         optimizer.zero_grad()
@@ -319,7 +321,7 @@ def main(args):
         
         optimizer.step()
 
-        model_q.append(model.clone())
+        model_q.append(deepcopy(model))
         if len(model_q) >= 3:
             model_q.popleft()
         
