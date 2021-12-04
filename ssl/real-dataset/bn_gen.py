@@ -307,6 +307,8 @@ def main(args):
             M = -pairwise_dist(z1)
             aug_dist = (z1 - z2).pow(2).sum(1)
             M[label, label] = -aug_dist
+            # 1/2 distance matches with innerprod
+            M = M / 2
         else:
             raise RuntimeError(f"Unknown similarity = {args.similarity}")
         
