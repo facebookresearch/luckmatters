@@ -293,17 +293,22 @@ def main(args):
         
         z1 = model(x1)
         z2 = model(x2)
+
         # #batch x output_dim
         # Then we compute the infoNCE. 
         z1 = l2_reg(z1)
         z2 = l2_reg(z2)
-        # nbatch x nbatch, minus pairwise distance, or inner_prod matrix. 
-        M = z1 @ z1.t()
-        M[label,label] = (z1 * z2).sum(dim=1)
 
-        #     M = -pairwise_dist(z1)
-        #     aug_dist = (z1 - z2).pow(2).sum(1)
-        #     M[label, label] = -aug_dist
+        if args.similarity == "dotprod":
+            # nbatch x nbatch, minus pairwise distance, or inner_prod matrix. 
+            M = z1 @ z1.t()
+            M[label,label] = (z1 * z2).sum(dim=1)
+        elif args.similarity == "negdist":
+            M = -pairwise_dist(z1)
+            aug_dist = (z1 - z2).pow(2).sum(1)
+            M[label, label] = -aug_dist
+        else:
+            raise RuntimeError(f"Unknown similarity = {args.similarity}")
         
         loss = loss_func(M / args.T, label)
         if torch.any(loss.isnan()):

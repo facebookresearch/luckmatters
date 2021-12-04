@@ -4,8 +4,6 @@ T: 0.1
 multi: 10
 seed: 1
 
-activation: relu
-
 # output dimension of second layer (right before contrastive learning)
 output_d: 20
 
@@ -32,6 +30,9 @@ distri:
 w1_bias: false 
 l2_type: regular
 loss_type: infoNCE
+activation: relu
+
+similarity: dotprod # or negdist
 
 niter: 5000
 
