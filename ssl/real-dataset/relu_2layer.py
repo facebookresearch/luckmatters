@@ -16,21 +16,30 @@ import common_utils
 import logging
 log = logging.getLogger(__file__)
 
-def _normalize_layer(layer):
-    with torch.no_grad():
-        norm = layer.weight.norm()
-        layer.weight[:] /= norm
-        if layer.bias is not None:
-            layer.bias[:] /= norm
+class Normalizer:
+    def __init__(self, layer):
+        self.layer = layer
+        self.get_norms()
 
-def _normalize_layer_filter(layer):
-    with torch.no_grad():
-        for i in range(layer.weight.size(0)):
-            # For each input filter, normalize
-            inorm = layer.weight[i,:].norm() 
-            layer.weight[i,:] /= inorm
-            if layer.bias is not None:
-                layer.bias[i] /= inorm
+    def get_norms(self):
+        with torch.no_grad():
+            self.norm = self.layer.weight.norm()
+            self.row_norms = self.layer.weight.norm(dim=1)
+
+    def normalize_layer(self):
+        with torch.no_grad():
+            norm = self.layer.weight.norm()
+            self.layer.weight[:] *= self.norm / norm
+            if self.layer.bias is not None:
+                self.layer.bias[:] *= self.norm / norm
+
+    def normalize_layer_filter(self):
+        with torch.no_grad():
+            row_norms = self.layer.weight.norm(dim=1) 
+            ratio = self.row_norms / row_norms
+            self.layer.weight *= ratio[:,None]
+            if self.layer.bias is not None:
+                self.layer.bias *= ratio
 
 
 class Model(nn.Module):
@@ -53,6 +62,9 @@ class Model(nn.Module):
         else:
             self.bn = None
 
+        self.normalizer_w1 = Normalizer(self.w1)
+        self.normalizer_w2 = Normalizer(self.w2)
+
     def forward(self, x):
         y = self.w1(x)
         y = self.activation(y)
@@ -64,12 +76,12 @@ class Model(nn.Module):
 
     def per_layer_normalize(self):
         # Normalize using F-norm
-        _normalize_layer(self.w1)
-        _normalize_layer(self.w2)
+        self.normalizer_w1.normalize_layer()
+        self.normalizer_w2.normalize_layer()
 
     def per_filter_normalize(self):
-        _normalize_layer(self.w2)
-        _normalize_layer_filter(self.w1)
+        self.normalizer_w1.normalize_layer()
+        self.normalizer_w2.normalize_layer_filter()
 
     
 def pairwise_dist(x):
