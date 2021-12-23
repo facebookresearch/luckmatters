@@ -1,0 +1,33 @@
+N: 1000
+batchsize: 128
+T: 0.1
+multi: 10
+seed: 1
+
+# output dimension of second layer (right before contrastive learning)
+d_output: 20
+d_hidden: 10
+
+# The first dimension is always the highest mag. 
+distri:
+  d: 10
+  mag_start: 10
+  mag_end: 1
+  std_aug: 0.5
+
+w1_bias: false 
+l2_type: regular
+loss_type: infoNCE
+activation: relu
+
+similarity: dotprod # or negdist
+normalization: none # none, perlayer, perfilter 
+
+niter: 5000
+
+use_bn: true
+
+opt:
+  lr: 0.01
+  momentum: 0.9
+  wd: 5e-3
