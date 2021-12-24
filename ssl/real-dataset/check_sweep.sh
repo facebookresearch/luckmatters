@@ -2,8 +2,6 @@
 
 logdir=$1
 shift
-key_stat=$1
-shift
 run_analysis=$1
 shift
 
@@ -12,4 +10,4 @@ if [ "$run_analysis" -eq "1" ]; then
 fi
 
 echo python ~/tools2/stats.py $logdir --key_stats $key_stat --groups / "$@"
-python ~/tools2/stats.py $logdir --key_stats $key_stat --groups / "$@"
+python ~/tools2/stats.py $logdir --groups / "$@"

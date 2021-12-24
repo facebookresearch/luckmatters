@@ -141,7 +141,8 @@ class Generator:
 
 _attr_multirun = {
     "check_result": check_result,
-    "metric_info": lambda _: dict(descending=True, topk_mean=1, topk=10) 
+    "common_options" : dict(topk_mean=1, topk=10, descending=True),
+    "metrics": dict(concentration={}, coverage={})
 }
 
 @hydra.main(config_path="config", config_name="relu_2layer.yaml")
