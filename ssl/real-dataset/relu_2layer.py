@@ -17,9 +17,10 @@ import logging
 log = logging.getLogger(__file__)
 
 class Normalizer:
-    def __init__(self, layer):
+    def __init__(self, layer, name=None):
         self.layer = layer
         self.get_norms()
+        log.info(f"[{name}] norm = {self.norm}, row_norms = {self.row_norms}")
 
     def get_norms(self):
         with torch.no_grad():
@@ -62,8 +63,8 @@ class Model(nn.Module):
         else:
             self.bn = None
 
-        self.normalizer_w1 = Normalizer(self.w1)
-        self.normalizer_w2 = Normalizer(self.w2)
+        self.normalizer_w1 = Normalizer(self.w1, name="W1")
+        self.normalizer_w2 = Normalizer(self.w2, name="W2")
 
     def forward(self, x):
         y = self.w1(x)
@@ -83,6 +84,9 @@ class Model(nn.Module):
         self.normalizer_w1.normalize_layer()
         self.normalizer_w2.normalize_layer_filter()
 
+    def w1_clamp_all_negatives(self):
+        with torch.no_grad(): 
+            self.w1.weight[self.w1.weight < 0] = 0 
     
 def pairwise_dist(x):
     # x: [N, d]
@@ -125,7 +129,10 @@ class Generator:
         self.distri = distri
         self.mags = torch.linspace(distri.mag_start, distri.mag_end, steps=distri.d)
     
-    def sample(self, batchsize):
+    def sample(self, batchsize, seed=None):
+        if seed is not None:
+            torch.manual_seed(seed)
+
         zs = self.sampler.sample((batchsize,))
         mags = torch.ones(batchsize) * self.mags[zs] 
         x1mags = mags + torch.randn(batchsize) * self.distri.std_aug
@@ -145,6 +152,84 @@ _attr_multirun = {
     "metrics": dict(concentration={}, coverage={})
 }
 
+def get_y(x1, x2):
+    N = x1.size(0)
+    y_neg = torch.kron(x1, torch.ones(N, 1)) - torch.cat([x1] * N, dim=0)
+    y_pos = x1 - x2
+    return y_neg, y_pos
+
+def compute_contrastive_covariance(f1, f2, x1, x2, T, norm_type):
+    N = f1.size(0)
+    d = x1.size(1)
+    label = list(range(N))
+    eta = 0
+    
+    if norm_type in ["regular", "no_proj"]:
+        norm_f1 = f1.norm(dim=1) + 1e-8
+        f1 = f1 / norm_f1[:,None]
+        
+        norm_f2 = f2.norm(dim=1) + 1e-8
+        f2 = f2 / norm_f2[:,None]
+        
+    # Now we compute the alphas
+    inner_prod = f1 @ f1.t()
+    inner_prod_pos = (f1*f2).sum(dim=1)
+    # Replace the diagnal with the inner product between f1 and f2
+    inner_prod[label, label] = eta * inner_prod_pos
+    
+    # Avoid inf in exp. 
+    inner_prod_shifted = inner_prod - inner_prod.max(dim=1)[0][:,None]
+    A_no_norm = (inner_prod_shifted/T).exp()
+    A = A_no_norm / (A_no_norm.sum(dim=1) + 1e-8)
+    
+    B = 1 - A.diag()
+    A[label, label] = 0
+    
+    # Then compute the matrix.
+    if norm_type == "no_l2":
+        y_neg, y_pos = get_y(x1, x2)
+        C_inter = y_neg.t() @ (A.view(-1)[:,None] * y_neg)
+        C_intra = y_pos.t() @ (B[:,None] * y_pos)
+        
+    elif norm_type == "no_proj":
+        x1_normalized = x1 / norm_f1[:,None]
+        x2_normalized = x2 / norm_f2[:,None]
+        
+        y_neg, y_pos = get_y(x1_normalized1, x2_normalized)
+        C_inter = y_neg.t() @ (A.view(-1)[:,None] * y_neg)
+        C_intra = y_pos.t() @ (B[:,None] * y_pos)
+
+    elif norm_type == "regular":
+        C_inter = torch.zeros(d, d)
+        C_intra = torch.zeros(d, d)
+        x1_normalized = x1 / norm_f1[:,None]
+        x2_normalized = x2 / norm_f2[:,None]
+
+        outers_neg = []    
+        outers_pos = [] 
+        for i in range(N):
+            outers_neg.append(torch.outer(x1_normalized[i,:], x1_normalized[i,:]))
+            outers_pos.append(torch.outer(x2_normalized[i,:], x2_normalized[i,:]))
+
+        for i in range(N):
+            for j in range(i + 1, N):
+                outer_ij = torch.outer(x1_normalized[i,:], x1_normalized[j,:])
+                term = (outers_neg[i] + outers_neg[j]) * inner_prod[i,j] - (outer_ij + outer_ij.t())
+                C_inter += (A[i,j] + A[j,i]) * term
+                # if A[i,j] > 1e-3:
+                #    import pdb
+                #    pdb.set_trace()
+                
+        for i in range(N):
+            outer = torch.outer(x1_normalized[i,:], x2_normalized[i,:])
+            term = (outers_neg[i] + outers_pos[i]) * inner_prod_pos[i] - (outer + outer.t())
+            C_intra += B[i] * term  
+    else:
+        raise RuntimeError(f"Unknown norm_type = {norm_type}")
+            
+    return C_inter, C_intra, A, B
+
+
 @hydra.main(config_path="config", config_name="relu_2layer.yaml")
 def main(args):
     log.info(common_utils.print_info(args))
@@ -153,6 +238,7 @@ def main(args):
     gen = Generator(args.distri)
         
     model = Model(args.distri.d, args.d_hidden, args.d_output, w1_bias=args.w1_bias, activation=args.activation, use_bn=args.use_bn)
+    model.w1_clamp_all_negatives()
 
     if args.loss_type == "infoNCE":
         loss_func = nn.CrossEntropyLoss()
@@ -178,15 +264,17 @@ def main(args):
     for t in range(args.niter):
         optimizer.zero_grad()
         
-        x1, x2, _, _ = gen.sample(args.batchsize)
+        x1, x2, zs, _ = gen.sample(args.batchsize, seed = t % 500)
+        # x1 += torch.randn(args.batchsize, x1.size(1)) * 0.001
+        # x2 += torch.randn(args.batchsize, x2.size(1)) * 0.001
         
-        z1 = model(x1)
-        z2 = model(x2)
+        f1 = model(x1)
+        f2 = model(x2)
 
         # #batch x output_dim
         # Then we compute the infoNCE. 
-        z1 = l2_reg(z1)
-        z2 = l2_reg(z2)
+        z1 = l2_reg(f1)
+        z2 = l2_reg(f2)
 
         if args.similarity == "dotprod":
             # nbatch x nbatch, minus pairwise distance, or inner_prod matrix. 
@@ -213,6 +301,12 @@ def main(args):
             log.info(f"Save to {model_name}")
             torch.save(model.state_dict(), model_name)
 
+            with torch.no_grad():
+                C_inter, C_intra, A, B = compute_contrastive_covariance(f1, f2, x1, x2, args.T, args.l2_type)
+            log.info(f"diag of C_inter: {C_inter.diag()}")
+            log.info(f"diag of C_intra: {C_intra.diag()}")
+            torch.save(dict(C_inter=C_inter, C_intra=C_intra, A=A, B=B, x1=x1, x2=x2, f1=f1.detach(), f2=f2.detach(), zs=zs), f"data-{t}.pth")
+
         loss.backward()
         
         optimizer.step()
@@ -223,6 +317,8 @@ def main(args):
             model.per_layer_normalize()
         elif args.normalization == "perfilter":
             model.per_filter_normalize()
+
+        model.w1_clamp_all_negatives()
 
         model_q.append(deepcopy(model))
         if len(model_q) >= 3:
