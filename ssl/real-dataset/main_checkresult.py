@@ -11,5 +11,7 @@ _result_matcher = [
 ]
 
 _attr_multirun = {
-    "check_result": lambda x: common_utils.MultiRunUtil.load_regex(x, _result_matcher)
+    "check_result": lambda x: common_utils.MultiRunUtil.load_regex(x, _result_matcher),
+    "common_options" : dict(topk_mean=1, topk=10, descending=True),
+    "metrics": dict(acc={})
 }
