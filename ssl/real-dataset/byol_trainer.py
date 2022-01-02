@@ -273,6 +273,10 @@ class BYOLTrainer:
             if not self.predictor_signaling_2:
                 sorted_values, _ = eigen_values.sort(descending=True)
                 log.info(f"Compute eigenvalues with boost_scale: Top-5: {sorted_values[:5]}, Bottom-5: {sorted_values[-5:]}")
+                
+            # add regularization to shrink to smaller than 1
+            if reg is not None:
+                eigen_values *= 1 - reg
 
         elif balance_type == "scale":
             max_eig = D.max()
