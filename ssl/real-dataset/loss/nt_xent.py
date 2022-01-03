@@ -68,6 +68,7 @@ class NTXentLoss(torch.nn.Module):
         positives = torch.cat([l_pos, r_pos]).view(2 * self.batch_size, 1)
 
         # 2N * (2N - 1) negative samples. 
+        # The i-th row corresponds to 2N - 1 negative samples for i-th sample.  
         negatives = similarity_matrix[self.mask_samples_from_same_repr].view(2 * self.batch_size, -1)
 
         temperature = self.params["temperature"]
@@ -95,6 +96,16 @@ class NTXentLoss(torch.nn.Module):
             
             w = w / (1 + w) / temperature / num_negative
             # Then we construct the loss function. 
+            w_pos = w.sum(dim=1, keepdim=True)
+            loss = (w_pos * r_pos - (w * r_neg).sum(dim=1)).mean()
+            loss_intra = beta * (w_pos * r_pos).mean()
+
+        elif loss_type == "dual":
+            # 1 - sim = dist
+            r_neg = 1 - negatives
+            r_pos = 1 - positives
+            w = (-r_neg.detach() / temperature).exp() 
+            # The below is actually mean(w * (r_pos - r_neg))
             w_pos = w.sum(dim=1, keepdim=True)
             loss = (w_pos * r_pos - (w * r_neg).sum(dim=1)).mean()
             loss_intra = beta * (w_pos * r_pos).mean()
