@@ -32,11 +32,7 @@ def hydra2dict(args):
 
 @hydra.main(config_path="config", config_name="byol_config.yaml")
 def main(args):
-    log.info("Command line: \n\n" + common_utils.pretty_print_cmd(sys.argv))
-    log.info(f"Working dir: {os.getcwd()}")
-    log.info("\n" + common_utils.get_git_hash())
-    log.info("\n" + common_utils.get_git_diffs())
-
+    log.info(common_utils.print_info(args))
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{args.gpu}"
     common_utils.set_all_seeds(args.seed)
     log.info(common_utils.pretty_print_args(args))

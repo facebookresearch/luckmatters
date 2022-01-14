@@ -67,7 +67,7 @@ class NTXentLoss(torch.nn.Module):
         # 2N positive pairs 
         positives = torch.cat([l_pos, r_pos]).view(2 * self.batch_size, 1)
 
-        # 2N * (2N - 1) negative samples. 
+        # 2N * (2N - 2) negative samples. 
         # The i-th row corresponds to 2N - 1 negative samples for i-th sample.  
         negatives = similarity_matrix[self.mask_samples_from_same_repr].view(2 * self.batch_size, -1)
 
@@ -109,6 +109,24 @@ class NTXentLoss(torch.nn.Module):
             w_pos = w.sum(dim=1, keepdim=True)
             loss = (w_pos * r_pos - (w * r_neg).sum(dim=1)).mean()
             loss_intra = beta * (w_pos * r_pos).mean()
+
+        elif loss_type == "dual_lowrank":
+            # 1 - sim = dist
+            r_neg = 1 - negatives
+            r_pos = 1 - positives
+
+            w = (-r_neg.detach() / temperature).exp() 
+            # get approximate low rank decomposition. 
+            sample_importance = w.mean(dim=1)
+            #sample_importance = sample_importance / sample_importance.sum()
+            similarity_matrix_low_rank = torch.outer(sample_importance, sample_importance)
+
+            w_low_rank = similarity_matrix_low_rank[self.mask_samples_from_same_repr].view(2 * self.batch_size, -1)
+            w_pos_low_rank = w_low_rank.sum(dim=1, keepdim=True) 
+
+            # The below is actually mean(w_low_rank * (r_pos - r_neg))
+            loss = (w_pos_low_rank * r_pos - (w_low_rank * r_neg).sum(dim=1)).mean()
+            loss_intra = beta * (w_pos_low_rank * r_pos).mean()
 
         elif loss_type == "default":
             if self.params["add_one_in_neg"]:
