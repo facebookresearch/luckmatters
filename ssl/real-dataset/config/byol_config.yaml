@@ -14,7 +14,7 @@ network:
     mlp_hidden_size: 512
     projection_size: 128
 
-augmentation:
+aug:
   jitter: 1
   prob_hflip: 0.5
   prob_grayscale: 0.2
