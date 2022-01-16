@@ -14,9 +14,11 @@ network:
     mlp_hidden_size: 512
     projection_size: 128
 
-data_transforms:
-  s: 1
-  input_shape: (96,96,3)
+augmentation:
+  jitter: 1
+  prob_hflip: 0.5
+  prob_grayscale: 0.2
+  blur_sz: 0.1
 
 # Can be either simclr or byol
 method: byol 

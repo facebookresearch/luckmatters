@@ -40,7 +40,7 @@ def main(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     log.info(f"Training with: {device}")
 
-    data_transform = get_simclr_data_transforms_train(args['dataset'])
+    data_transform = get_simclr_data_transforms_train(args['dataset'], args["augmentation"])
     data_transform_identity = get_simclr_data_transforms_test(args['dataset'])
 
     if args["dataset"] == "stl10":
