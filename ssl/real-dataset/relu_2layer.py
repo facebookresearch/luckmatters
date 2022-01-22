@@ -115,13 +115,11 @@ def check_result(subfolder):
         coverage.append(w.max(dim=0)[0].mean().item())
 
     res = {
-        "folder": subfolder,
-        "modified_since": 0,
         "concentration": concentration,
         "coverage": coverage
     }
 
-    return [ res ]
+    return res
 
 class Generator:
     def __init__(self, distri):
@@ -147,9 +145,12 @@ class Generator:
 
 
 _attr_multirun = {
-    "check_result": check_result,
+    "check_result": {
+        "default": check_result,
+    }
     "common_options" : dict(topk_mean=1, topk=10, descending=True),
-    "metrics": dict(concentration={}, coverage={})
+    "specific_options": dict(concentration={}, coverage={}),
+    "default_metrics": [ "concentration", "coverage" ]
 }
 
 def get_y(x1, x2):

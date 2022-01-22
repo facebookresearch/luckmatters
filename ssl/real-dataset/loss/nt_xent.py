@@ -110,6 +110,16 @@ class NTXentLoss(torch.nn.Module):
             loss = (w_pos * r_pos - (w * r_neg).sum(dim=1)).mean()
             loss_intra = beta * (w_pos * r_pos).mean()
 
+        elif loss_type == "dual_backprop":
+            # 1 - sim = dist
+            r_neg = 1 - negatives
+            r_pos = 1 - positives
+            w = (-r_neg / temperature).exp() 
+            # The below is actually mean(w * (r_pos - r_neg))
+            w_pos = w.sum(dim=1, keepdim=True)
+            loss = (w_pos * r_pos - (w * r_neg).sum(dim=1)).mean()
+            loss_intra = beta * (w_pos * r_pos).mean()
+
         elif loss_type == "dual_lowrank":
             # 1 - sim = dist
             r_neg = 1 - negatives
