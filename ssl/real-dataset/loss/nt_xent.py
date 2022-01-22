@@ -74,6 +74,8 @@ class NTXentLoss(torch.nn.Module):
         temperature = self.params["temperature"]
         beta = self.params["beta"]
         loss_type = self.params["loss_type"]
+        alpha_exponent = self.params["alpha_exponent"]
+        alpha_type = self.params["alpha_type"]
 
         if loss_type == "exact_cov":
             # 1 - sim = dist
@@ -104,7 +106,10 @@ class NTXentLoss(torch.nn.Module):
             # 1 - sim = dist
             r_neg = 1 - negatives
             r_pos = 1 - positives
-            w = (-r_neg.detach() / temperature).exp() 
+
+            w = r_neg.detach().pow(alpha_exponent)
+            if alpha_type == "exp":
+                w = (-w / temperature).exp()
             # The below is actually mean(w * (r_pos - r_neg))
             w_pos = w.sum(dim=1, keepdim=True)
             loss = (w_pos * r_pos - (w * r_neg).sum(dim=1)).mean()
@@ -114,7 +119,10 @@ class NTXentLoss(torch.nn.Module):
             # 1 - sim = dist
             r_neg = 1 - negatives
             r_pos = 1 - positives
-            w = (-r_neg / temperature).exp() 
+
+            w = r_neg.pow(alpha_exponent)
+            if alpha_type == "exp":
+                w = (-w / temperature).exp()
             # The below is actually mean(w * (r_pos - r_neg))
             w_pos = w.sum(dim=1, keepdim=True)
             loss = (w_pos * r_pos - (w * r_neg).sum(dim=1)).mean()

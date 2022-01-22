@@ -70,6 +70,8 @@ trainer:
     add_one_in_neg: false
     loss_type: default
     exact_cov_unaug_sim: false
+    alpha_type: exp # or poly
+    alpha_exponent: 1 # 1 = square loss. 
 
   l2_reg_type: regular
 
