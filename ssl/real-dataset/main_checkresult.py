@@ -46,18 +46,34 @@ def check_edge_stats(subfolder):
     last_model_file = all_model_files[-1][1]
     model = torch.load(last_model_file, map_location=torch.device('cpu'))
 
-    avg_edge_strength = 0
+    res = dict()
 
-    # res = get_entropy(model)
-    ws = model["online_network_state_dict"]["encoder.conv1.weight"]
-    for k in range(ws.size(0)):
-      w = ws[k,:].permute(1, 2, 0)    
-      edge_strength = edge_energy(w)
-      avg_edge_strength += edge_strength
+    for layer_name, ws in model["online_network_state_dict"].items():
+      key = None
+      if layer_name == "encoder.conv1.weight":
+        key = "c1"
+      else:  
+        m = matcher.match(layer_name) 
+        if m:
+          key = f"l{m.group(1)}{m.group(2)}c{m.group(3)}" 
 
-    avg_edge_strength /= ws.size(0)
+      if key is not None:
+        avg_edge_strength = 0
+        avg_edge_strength_normalized = 0
+        for k in range(ws.size(0)):
+          w = ws[k,:].permute(1, 2, 0)    
+          avg_edge_strength += edge_energy(w)
 
-    return dict(edge_strength=avg_edge_strength.item() * 1000)
+          # Normalize. 
+          w = w / (w.pow(2).sum().sqrt() + 1e-6)
+          avg_edge_strength_normalized += edge_energy(w)
+
+        avg_edge_strength /= ws.size(0)
+        avg_edge_strength_normalized /= ws.size(0)
+        res[key] = avg_edge_strength.item() * 1000 
+        res[key + "_n"] = avg_edge_strength_normalized.item() * 1000
+
+    return res
 
 _result_matcher = [
   {

@@ -140,7 +140,7 @@ predictor_optimizer:
     momentum: 0.9
     weight_decay: 0.0004
 
-dataset_path: ./datasets
+dataset_path: /checkpoint/yuandong/datasets
 # Can be stl10 or cifar10
 dataset: stl10 
 
