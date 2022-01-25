@@ -31,6 +31,10 @@ def edge_energy(f):
     dy = f[:, 1:, :] - f[:, :-1, :]
     return (dx.pow(2).mean() + dy.pow(2).mean()) / 2
 
+def edge_energy2(f):
+    dx = f[2:, 1:-1, :] - f[:-2, 1:-1, :]
+    dy = f[1:-1, 2:, :] - f[1:-1, :-2, :]
+    return (dx.pow(2) + dy.pow(2)).sqrt().mean()
 
 def check_edge_stats(subfolder):
     model_files = glob.glob(os.path.join(subfolder, "checkpoints/model_*.pth"))
@@ -62,11 +66,11 @@ def check_edge_stats(subfolder):
         avg_edge_strength_normalized = 0
         for k in range(ws.size(0)):
           w = ws[k,:].permute(1, 2, 0)    
-          avg_edge_strength += edge_energy(w)
+          avg_edge_strength += edge_energy2(w)
 
           # Normalize. 
           w = w / (w.pow(2).sum().sqrt() + 1e-6)
-          avg_edge_strength_normalized += edge_energy(w)
+          avg_edge_strength_normalized += edge_energy2(w)
 
         avg_edge_strength /= ws.size(0)
         avg_edge_strength_normalized /= ws.size(0)

@@ -72,6 +72,7 @@ trainer:
     exact_cov_unaug_sim: false
     alpha_type: exp # or poly
     alpha_exponent: 1 # 1 = square loss. 
+    inverse_exponent: 1
 
   l2_reg_type: regular
 

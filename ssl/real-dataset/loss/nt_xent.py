@@ -1,6 +1,20 @@
 import torch
 import numpy as np
 
+def quadratic_assignment(dists, tau):
+    # each row of dists need to be converged to alpha. 
+    N = dists.size(1)
+    sorted_dists, sorted_indices = dists.sort(1)
+    moving_sum = sorted_dists.cumsum(dim=1)
+    indices = torch.arange(0, N).to(moving_sum.device)
+    moving_avg = (moving_sum + tau) / (indices[None,:] + 1) 
+    indices_to_keep = sorted_dists < moving_avg
+    first_indices = torch.logical_xor(indices_to_keep[:, 1:], indices_to_keep[:, :-1]).float() @ indices[1:].float() 
+    mu = moving_avg.gather(1, first_indices.long().view(dists.size(0), -1)).squeeze()
+    return (mu[:, None] - dists).clamp(min=0) / tau 
+
+def inverse_assignment(dists, tau, inverse_exponent):
+    return 1 / (dists + tau).pow(inverse_exponent)
 
 class NTXentLoss(torch.nn.Module):
 
@@ -76,6 +90,7 @@ class NTXentLoss(torch.nn.Module):
         loss_type = self.params["loss_type"]
         alpha_exponent = self.params["alpha_exponent"]
         alpha_type = self.params["alpha_type"]
+        inverse_exponent = self.params["inverse_exponent"]
 
         if loss_type == "exact_cov":
             # 1 - sim = dist
@@ -110,6 +125,13 @@ class NTXentLoss(torch.nn.Module):
             w = r_neg.detach().pow(alpha_exponent)
             if alpha_type == "exp":
                 w = (-w / temperature).exp()
+            elif alpha_type == "quadratic":
+                w = quadratic_assignment(w, temperature)
+            elif alpha_type == "inverse":
+                w = inverse_assignment(w, temperature, inverse_exponent)
+            else:
+                raise RuntimeError(f"Unknown alpha_type = {alpha_type}")
+
             # The below is actually mean(w * (r_pos - r_neg))
             w_pos = w.sum(dim=1, keepdim=True)
             loss = (w_pos * r_pos - (w * r_neg).sum(dim=1)).mean()
