@@ -178,7 +178,11 @@ class ExtendedBasicBlock(nn.Module):
 
         conv_variant = self.conv_spec["variant"]
         if conv_variant == "resample":
-            self.conv1 = Conv2dExt(self.conv1, self.conv_spec)
+            layer_involved = self.conv_spec["layer_involved"].split(",")
+            assert len(layer_involved) > 0, f"when variant is set to be resample, layer_involved should contain > 0 entries"
+            for layer_name in layer_involved:
+                setattr(self, layer_name, Conv2dExt(getattr(self, layer_name), self.conv_spec)) 
+                log.info(f"ExtendBasicBlock: setting {layer_name} to be Conv2dExt")
         elif conv_variant == "regular":
             pass
         else:
