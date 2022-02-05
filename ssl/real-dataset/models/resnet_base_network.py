@@ -215,6 +215,8 @@ class ExtendedBasicBlock(nn.Module):
     def post_process(self):
         if isinstance(self.conv1, Conv2dExt):
             self.conv1.post_process() 
+        if isinstance(self.conv2, Conv2dExt):
+            self.conv2.post_process() 
 
 def change_layers(model, **kwargs):
     output = OrderedDict()
