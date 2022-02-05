@@ -3,7 +3,7 @@ network:
   pretrained_path: None
   conv_spec:
     variant: regular
-    reset_freq: 0
+    reset_freq: 100
     resample_ratio: 0.05
   bn_spec: 
     enable_bn1: True

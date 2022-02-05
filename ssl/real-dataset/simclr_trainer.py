@@ -165,6 +165,7 @@ class SimCLRTrainer(object):
                     all_loss.backward()
 
                 self.optimizer.step()
+                self.model.post_process()
                 n_iter += 1
 
             # warmup for the first 10 epochs

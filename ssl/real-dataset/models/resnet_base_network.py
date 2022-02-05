@@ -11,10 +11,11 @@ log = logging.getLogger(__file__)
 
 class Conv2dExt(nn.Module):
     def __init__(self, conv, conv_spec):
+        super(Conv2dExt, self).__init__()
         self.conv = conv
         # Add a bunch of hook to monitor the input and gradInput.
         self.conv.register_forward_hook(self._forward_hook)
-        self.conv.register_full_backward_hook(self._backward_hook)
+        self.conv.register_backward_hook(self._backward_hook)
 
         self.conv_spec = conv_spec
         self.filter_grad_sqr = None
@@ -22,19 +23,19 @@ class Conv2dExt(nn.Module):
 
     def _forward_hook(self, _, input, output):
         # Record input and output
-        self.input = input.clone()
+        self.input = input[0].clone()
         self.output = output.clone()
 
     def _backward_hook(self, _, grad_input, grad_output):
         # [batch, C, H, W]
-        self.grad_input = grad_input.clone()
+        self.grad_input = grad_input[0].clone()
         return None
 
     def forward(self, x):
         return self.conv(x)
 
     # finally, once the backward is done, we modify the weights accordingly. 
-    def modify_weights(self):
+    def post_process(self):
         with torch.no_grad():
             # compute statistics. 
             this_filter_grad_sqr = self.grad_input.pow(2).mean(dim=(0,2,3))
@@ -44,7 +45,7 @@ class Conv2dExt(nn.Module):
                 self.filter_grad_sqr = this_filter_grad_sqr 
 
             self.cnt += 1
-            if self.cnt < self.conv_spec.reset_freq:
+            if self.cnt < self.conv_spec["reset_freq"]:
                 # do nothing
                 return
             
@@ -58,19 +59,19 @@ class Conv2dExt(nn.Module):
             scores, batch_indices = self.output.clamp(min=0).mean(dim=1).min(dim=0)
 
             # cut padding
-            out_channel = self.conv.out_channel
+            out_channels = self.conv.out_channels
             kh, kw = self.conv.kernel_size
             sh, sw = kh // 2, kw // 2
-            scores = scores[sh:-sh,sw:-sw]
-            batch_indices = batch_indices[sh:-sh,sw:-sw]
+            scores = scores[sh:-sh,sw:-sw].contiguous()
+            batch_indices = batch_indices[sh:-sh,sw:-sw].contiguous()
 
             # average norm of weight. 
-            norms = self.conv.weight.view(out_channel, -1).norm(dim=1)
+            norms = self.conv.weight.view(out_channels, -1).norm(dim=1)
             avg_norm = norms.mean()
 
             # then we sample scores, the low the score is, the higher the probability is. 
             sampler = Categorical(logits=scores.view(-1) * -10) 
-            num_sample = int(self.conv_spec.resample_ratio * out_channel) 
+            num_sample = int(self.conv_spec["resample_ratio"] * out_channels) 
             for i in range(num_sample): 
                 loc_idx = sampler.sample().item()
                 w_idx = loc_idx % scores.size(1)
@@ -81,12 +82,13 @@ class Conv2dExt(nn.Module):
                 filter_idx = indices[i]
 
                 # Directly assign weights!
-                patch = self.input[batch_idx, :, h_idx:h_idx+kh, w_idx:kw]
+                patch = self.input[batch_idx, :, h_idx:h_idx+kh, w_idx:w_idx+kw]
                 patch = patch / patch.norm() * avg_norm
                 self.conv.weight[filter_idx,:,:,:] = patch
-                self.conv.bias[filter_idx] = -avg_norm / 2
+                if self.conv.bias is not None:
+                    self.conv.bias[filter_idx] = -avg_norm / 2
 
-            log.info(f"Update conv2d weight. freq = {self.conv_spec.reset_freq}, ratio = {self.conv_spec.resample_ratio}")
+            log.info(f"Update conv2d weight. freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}")
 
             # reset counters. 
             self.cnt = 0
@@ -143,7 +145,7 @@ class ExtendedBasicBlock(nn.Module):
         self.bn_spec = bn_spec
         self.conv_spec = conv_spec
 
-        bn_variant = bn_spec.bn_variant
+        bn_variant = bn_spec["bn_variant"]
         if bn_variant == "no_affine":
             # do not put affine. 
             self.bn1 = nn.BatchNorm2d(self.bn1.weight.size(0), self.bn1.eps, self.bn1.momentum, affine=False)
@@ -167,25 +169,28 @@ class ExtendedBasicBlock(nn.Module):
 
         log.info(f"ExtendedBasicBlock: BN set to be {bn_variant}")
 
-        if self.conv_spec.variant == "resample":
+        conv_variant = self.conv_spec["variant"]
+        if conv_variant == "resample":
             self.conv1 = Conv2dExt(self.conv1, self.conv_spec)
-        elif self.conv_spec.variant == "regular":
+        elif conv_variant == "regular":
             pass
         else:
-            raise RuntimeError(f"Unknown conv_variant! {self.conv_spec.variant}")
+            raise RuntimeError(f"Unknown conv_variant! {conv_variant}")
+
+        log.info(f"ExtendedBasicBlock: Conv set to be {conv_variant}")
 
     def forward(self, x):
         identity = x
 
         out = self.conv1(x)
-        if self.bn_spec.enable_bn1:
+        if self.bn_spec["enable_bn1"]:
             out = self.bn1(out)
 
         out = self.relu(out)
 
         out = self.conv2(out)
 
-        if self.bn_spec.enable_bn2:
+        if self.bn_spec["enable_bn2"]:
             out = self.bn2(out)
 
         if self.downsample is not None:
@@ -195,6 +200,10 @@ class ExtendedBasicBlock(nn.Module):
         out = self.relu(out)
 
         return out
+
+    def post_process(self):
+        if isinstance(self.conv1, Conv2dExt):
+            self.conv1.post_process() 
 
 def change_layers(model, **kwargs):
     output = OrderedDict()
@@ -253,3 +262,11 @@ class ResNet18(torch.nn.Module):
         h = self.encoder(x)
         h = h.view(h.shape[0], h.shape[1])
         return self.projetion(h)
+
+    def post_process(self):
+        for name, module in self.encoder.named_children():
+            if isinstance(module, nn.Sequential):
+                for name2, module2 in module.named_children():
+                    if isinstance(module2, ExtendedBasicBlock):
+                        module2.post_process()
+                
