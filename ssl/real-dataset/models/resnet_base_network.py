@@ -23,7 +23,7 @@ class Conv2dExt(nn.Module):
 
         out_channels = self.conv.out_channels
         self.num_sample = int(self.conv_spec["resample_ratio"] * out_channels) 
-        log.info(f"Conv2dExt: freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, #{self.num_sample} / {out_channels}")
+        log.info(f"Conv2dExt: freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, change filter {self.num_sample} / {out_channels}")
 
     def _forward_hook(self, _, input, output):
         # Record input and output
@@ -186,7 +186,6 @@ class ExtendedBasicBlock(nn.Module):
             assert len(layer_involved) > 0, f"when variant is set to be resample, layer_involved should contain > 0 entries"
             for layer_name in layer_involved:
                 setattr(self, layer_name, Conv2dExt(getattr(self, layer_name), self.conv_spec)) 
-                log.info(f"ExtendBasicBlock: setting {layer_name} to be Conv2dExt")
         elif conv_variant == "regular":
             pass
         else:
