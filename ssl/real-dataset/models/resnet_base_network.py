@@ -4,8 +4,94 @@ import torch
 from models.mlp_head import MLPHead
 from collections import OrderedDict
 
+from torch.distributions.categorical import Categorical
+
 import logging
 log = logging.getLogger(__file__)
+
+class Conv2dExt(nn.Module):
+    def __init__(self, conv, conv_spec):
+        self.conv = conv
+        # Add a bunch of hook to monitor the input and gradInput.
+        self.conv.register_forward_hook(self._forward_hook)
+        self.conv.register_full_backward_hook(self._backward_hook)
+
+        self.conv_spec = conv_spec
+        self.filter_grad_sqr = None
+        self.cnt = 0
+
+    def _forward_hook(self, _, input, output):
+        # Record input and output
+        self.input = input.clone()
+        self.output = output.clone()
+
+    def _backward_hook(self, _, grad_input, grad_output):
+        # [batch, C, H, W]
+        self.grad_input = grad_input.clone()
+        return None
+
+    def forward(self, x):
+        return self.conv(x)
+
+    # finally, once the backward is done, we modify the weights accordingly. 
+    def modify_weights(self):
+        with torch.no_grad():
+            # compute statistics. 
+            this_filter_grad_sqr = self.grad_input.pow(2).mean(dim=(0,2,3))
+            if self.filter_grad_sqr is not None:
+                self.filter_grad_sqr += this_filter_grad_sqr 
+            else:
+                self.filter_grad_sqr = this_filter_grad_sqr 
+
+            self.cnt += 1
+            if self.cnt < self.conv_spec.reset_freq:
+                # do nothing
+                return
+            
+            # Check all gradient input and find which filter has the lowest 
+            self.filter_grad_sqr /= self.cnt
+            # from smallest to highest.
+            sorted_stats, indices = self.filter_grad_sqr.sort()
+
+            # For filter with the lowest gradient input, we want to replace it with patterns that is the least received (i.e., no filter responds strongly with it)
+            # scores = [H, W]
+            scores, batch_indices = self.output.clamp(min=0).mean(dim=1).min(dim=0)
+
+            # cut padding
+            out_channel = self.conv.out_channel
+            kh, kw = self.conv.kernel_size
+            sh, sw = kh // 2, kw // 2
+            scores = scores[sh:-sh,sw:-sw]
+            batch_indices = batch_indices[sh:-sh,sw:-sw]
+
+            # average norm of weight. 
+            norms = self.conv.weight.view(out_channel, -1).norm(dim=1)
+            avg_norm = norms.mean()
+
+            # then we sample scores, the low the score is, the higher the probability is. 
+            sampler = Categorical(logits=scores.view(-1) * -10) 
+            num_sample = int(self.conv_spec.resample_ratio * out_channel) 
+            for i in range(num_sample): 
+                loc_idx = sampler.sample().item()
+                w_idx = loc_idx % scores.size(1)
+                h_idx = loc_idx // scores.size(1)
+                batch_idx = batch_indices.view(-1)[loc_idx]
+
+                # The lowest i-th filter to be replaced. 
+                filter_idx = indices[i]
+
+                # Directly assign weights!
+                patch = self.input[batch_idx, :, h_idx:h_idx+kh, w_idx:kw]
+                patch = patch / patch.norm() * avg_norm
+                self.conv.weight[filter_idx,:,:,:] = patch
+                self.conv.bias[filter_idx] = -avg_norm / 2
+
+            log.info(f"Update conv2d weight. freq = {self.conv_spec.reset_freq}, ratio = {self.conv_spec.resample_ratio}")
+
+            # reset counters. 
+            self.cnt = 0
+            self.filter_grad_sqr.fill_(0)
+
 
 # Customized BatchNorm
 class BatchNorm2dExt(nn.Module):
@@ -49,14 +135,15 @@ class BatchNorm2dExt(nn.Module):
 class ExtendedBasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, basic_block, enable_bn1=True, enable_bn2=True, bn_variant="regular"):
+    def __init__(self, basic_block, bn_spec=None, conv_spec=None):
         super(ExtendedBasicBlock, self).__init__()
         for key in ["conv1", "bn1", "relu", "conv2", "bn2", "downsample", "stride"]:
             setattr(self, key, getattr(basic_block, key)) 
 
-        self.enable_bn1 = enable_bn1
-        self.enable_bn2 = enable_bn2
+        self.bn_spec = bn_spec
+        self.conv_spec = conv_spec
 
+        bn_variant = bn_spec.bn_variant
         if bn_variant == "no_affine":
             # do not put affine. 
             self.bn1 = nn.BatchNorm2d(self.bn1.weight.size(0), self.bn1.eps, self.bn1.momentum, affine=False)
@@ -80,19 +167,25 @@ class ExtendedBasicBlock(nn.Module):
 
         log.info(f"ExtendedBasicBlock: BN set to be {bn_variant}")
 
+        if self.conv_spec.variant == "resample":
+            self.conv1 = Conv2dExt(self.conv1, self.conv_spec)
+        elif self.conv_spec.variant == "regular":
+            pass
+        else:
+            raise RuntimeError(f"Unknown conv_variant! {self.conv_spec.variant}")
 
     def forward(self, x):
         identity = x
 
         out = self.conv1(x)
-        if self.enable_bn1:
+        if self.bn_spec.enable_bn1:
             out = self.bn1(out)
 
         out = self.relu(out)
 
         out = self.conv2(out)
 
-        if self.enable_bn2:
+        if self.bn_spec.enable_bn2:
             out = self.bn2(out)
 
         if self.downsample is not None:
@@ -103,7 +196,7 @@ class ExtendedBasicBlock(nn.Module):
 
         return out
 
-def change_layers(model, kwargs):
+def change_layers(model, **kwargs):
     output = OrderedDict()
 
     for name, module in model.named_children():
@@ -111,7 +204,7 @@ def change_layers(model, kwargs):
             module = ExtendedBasicBlock(module, **kwargs)
             
         if isinstance(module, nn.Sequential):
-            module = change_layers(module, kwargs)
+            module = change_layers(module, **kwargs)
 
         if module is not None:
             output[name] = module
@@ -147,8 +240,10 @@ class ResNet18(torch.nn.Module):
         self.encoder = nn.Sequential(self.f)
 
         bn_spec = kwargs["bn_spec"]
+        conv_spec = kwargs["conv_spec"]
         log.info(bn_spec)
-        self.encoder = change_layers(self.encoder, bn_spec)
+        log.info(conv_spec)
+        self.encoder = change_layers(self.encoder, bn_spec=bn_spec, conv_spec=conv_spec)
         # print(self.encoder)
 
         self.feature_dim = resnet.fc.in_features
