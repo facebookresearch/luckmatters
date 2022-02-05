@@ -21,6 +21,10 @@ class Conv2dExt(nn.Module):
         self.filter_grad_sqr = None
         self.cnt = 0
 
+        out_channels = self.conv.out_channels
+        self.num_sample = int(self.conv_spec["resample_ratio"] * out_channels) 
+        log.info(f"Conv2dExt: freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, #{self.num_sample} / {out_channels}")
+
     def _forward_hook(self, _, input, output):
         # Record input and output
         self.input = input[0].clone()
@@ -66,6 +70,7 @@ class Conv2dExt(nn.Module):
 
             # cut padding
             out_channels = self.conv.out_channels
+
             kh, kw = self.conv.kernel_size
             sh, sw = kh // 2, kw // 2
             scores = scores[sh:-sh,sw:-sw].contiguous()
@@ -77,8 +82,7 @@ class Conv2dExt(nn.Module):
 
             # then we sample scores, the low the score is, the higher the probability is. 
             sampler = Categorical(logits=scores.view(-1) * -10) 
-            num_sample = int(self.conv_spec["resample_ratio"] * out_channels) 
-            for i in range(num_sample): 
+            for i in range(self.num_sample): 
                 loc_idx = sampler.sample().item()
                 w_idx = loc_idx % scores.size(1)
                 h_idx = loc_idx // scores.size(1)
