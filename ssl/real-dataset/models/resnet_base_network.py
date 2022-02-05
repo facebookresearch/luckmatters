@@ -31,6 +31,11 @@ class Conv2dExt(nn.Module):
         self.grad_input = grad_input[0].clone()
         return None
 
+    def _clean_up(self):
+        self.input = None
+        self.output = None
+        self.grad_input = None
+
     def forward(self, x):
         return self.conv(x)
 
@@ -47,6 +52,7 @@ class Conv2dExt(nn.Module):
             self.cnt += 1
             if self.cnt < self.conv_spec["reset_freq"]:
                 # do nothing
+                self._clean_up()
                 return
             
             # Check all gradient input and find which filter has the lowest 
@@ -88,11 +94,12 @@ class Conv2dExt(nn.Module):
                 if self.conv.bias is not None:
                     self.conv.bias[filter_idx] = -avg_norm / 2
 
-            log.info(f"Update conv2d weight. freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}")
+            # log.info(f"Update conv2d weight. freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}")
 
             # reset counters. 
             self.cnt = 0
             self.filter_grad_sqr.fill_(0)
+            self._clean_up()
 
 
 # Customized BatchNorm
