@@ -10,8 +10,9 @@ import logging
 log = logging.getLogger(__file__)
 
 class Conv2dExt(nn.Module):
-    def __init__(self, conv, conv_spec):
+    def __init__(self, name, conv, conv_spec):
         super(Conv2dExt, self).__init__()
+        self.name = name
         self.conv = conv
         # Add a bunch of hook to monitor the input and gradInput.
         self.conv.register_forward_hook(self._forward_hook)
@@ -23,35 +24,47 @@ class Conv2dExt(nn.Module):
 
         out_channels = self.conv.out_channels
         self.num_sample = int(self.conv_spec["resample_ratio"] * out_channels) 
-        log.info(f"Conv2dExt: freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, change filter {self.num_sample} / {out_channels}")
+        log.info(f"Conv2dExt[{self.name}]: freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, change filter {self.num_sample} / {out_channels}")
 
     def _forward_hook(self, _, input, output):
+        if not self.training:
+            return
+
         # Record input and output
         self.input = input[0].clone()
         self.output = output.clone()
 
     def _backward_hook(self, _, grad_input, grad_output):
+        if not self.training:
+            return
+
         # [batch, C, H, W]
-        self.grad_input = grad_input[0].clone()
+        self.grad_output = grad_output[0].clone()
         return None
 
     def _clean_up(self):
         self.input = None
         self.output = None
-        self.grad_input = None
+        self.grad_output = None
 
     def forward(self, x):
         return self.conv(x)
 
     # finally, once the backward is done, we modify the weights accordingly. 
     def post_process(self):
+        if not self.training:
+            return
+
         with torch.no_grad():
             # compute statistics. 
-            this_filter_grad_sqr = self.grad_input.pow(2).mean(dim=(0,2,3))
+            out_channels = self.conv.out_channels
+
+            this_filter_grad_sqr = self.grad_output.pow(2).sum(dim=(0,2,3))
             if self.filter_grad_sqr is not None:
                 self.filter_grad_sqr += this_filter_grad_sqr 
             else:
                 self.filter_grad_sqr = this_filter_grad_sqr 
+                assert self.filter_grad_sqr.size(0) == out_channels 
 
             self.cnt += 1
             if self.cnt < self.conv_spec["reset_freq"]:
@@ -59,46 +72,59 @@ class Conv2dExt(nn.Module):
                 self._clean_up()
                 return
             
-            # Check all gradient input and find which filter has the lowest 
+            # Check all gradient_at_output level and find which filter has the lowest 
             self.filter_grad_sqr /= self.cnt
             # from smallest to highest.
             sorted_stats, indices = self.filter_grad_sqr.sort()
 
-            # For filter with the lowest gradient input, we want to replace it with patterns that is the least received (i.e., no filter responds strongly with it)
-            # scores = [H, W]
-            scores, batch_indices = self.output.clamp(min=0).mean(dim=1).min(dim=0)
+            # For filter with the lowest gradient_at_output, we want to replace it with patterns that is the least received (i.e., no filter responds strongly with it)
+            # scores = [B, H, W]
+            scores = self.output.clamp(min=0).mean(dim=1)
 
             # cut padding
-            out_channels = self.conv.out_channels
-
             kh, kw = self.conv.kernel_size
             sh, sw = kh // 2, kw // 2
-            scores = scores[sh:-sh,sw:-sw].contiguous()
-            batch_indices = batch_indices[sh:-sh,sw:-sw].contiguous()
+            scores = scores[:, sh:-sh,sw:-sw].contiguous()
+
+            # need to normalize per sample.
+            scores = scores / (scores.mean(dim=(1,2),keepdim=True) + 1e-6)
 
             # average norm of weight. 
             norms = self.conv.weight.view(out_channels, -1).norm(dim=1)
             avg_norm = norms.mean()
 
             # then we sample scores, the low the score is, the higher the probability is. 
-            sampler = Categorical(logits=scores.view(-1) * -10) 
+            sampler = Categorical(logits=scores.view(-1) / (scores.max() + 1e-8) * -4) 
+
+            sel_indices = []
             for i in range(self.num_sample): 
+                # import pdb
+                # pdb.set_trace()
                 loc_idx = sampler.sample().item()
-                w_idx = loc_idx % scores.size(1)
-                h_idx = loc_idx // scores.size(1)
-                batch_idx = batch_indices.view(-1)[loc_idx]
+
+                w_idx = loc_idx % scores.size(2)
+                hb_idx = loc_idx // scores.size(2)
+                h_idx = hb_idx % scores.size(1)
+                b_idx = hb_idx // scores.size(1) 
 
                 # The lowest i-th filter to be replaced. 
-                filter_idx = indices[i]
+                filter_idx = indices[i].item()
+                sel_indices.append((loc_idx, filter_idx))
 
                 # Directly assign weights!
-                patch = self.input[batch_idx, :, h_idx:h_idx+kh, w_idx:w_idx+kw]
-                patch = patch / patch.norm() * avg_norm
-                self.conv.weight[filter_idx,:,:,:] = patch
-                if self.conv.bias is not None:
-                    self.conv.bias[filter_idx] = -avg_norm / 2
+                patch = self.input[b_idx, :, h_idx:h_idx+kh, w_idx:w_idx+kw]
+                patch_norm = patch.norm()
+                if patch_norm >= 1e-6:
+                    patch = patch / patch_norm * avg_norm
+                    self.conv.weight[filter_idx,:,:,:] = patch
+                    if self.conv.bias is not None:
+                        self.conv.bias[filter_idx] = -avg_norm / 2
 
-            # log.info(f"Update conv2d weight. freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}")
+            # log.info(f"Update conv2d weight. freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, loc_indices = {sel_indices} out of size {scores.size()}")
+            prompt = f"Conv2d[{self.name}] " + \
+                     f"min/max filter grad = {sorted_stats[0]:.4e}/{sorted_stats[-1]:.4e}, " + \
+                     f"avg selected = {sorted_stats[:self.num_sample].mean().item():.4e}"
+            log.info(prompt)
 
             # reset counters. 
             self.cnt = 0
@@ -148,11 +174,12 @@ class BatchNorm2dExt(nn.Module):
 class ExtendedBasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, basic_block, bn_spec=None, conv_spec=None):
+    def __init__(self, name, basic_block, bn_spec=None, conv_spec=None):
         super(ExtendedBasicBlock, self).__init__()
         for key in ["conv1", "bn1", "relu", "conv2", "bn2", "downsample", "stride"]:
             setattr(self, key, getattr(basic_block, key)) 
 
+        self.name = name
         self.bn_spec = bn_spec
         self.conv_spec = conv_spec
 
@@ -185,7 +212,7 @@ class ExtendedBasicBlock(nn.Module):
             layer_involved = self.conv_spec["layer_involved"].split("-")
             assert len(layer_involved) > 0, f"when variant is set to be resample, layer_involved should contain > 0 entries"
             for layer_name in layer_involved:
-                setattr(self, layer_name, Conv2dExt(getattr(self, layer_name), self.conv_spec)) 
+                setattr(self, layer_name, Conv2dExt(self.name + "." + layer_name, getattr(self, layer_name), self.conv_spec)) 
         elif conv_variant == "regular":
             pass
         else:
@@ -221,15 +248,16 @@ class ExtendedBasicBlock(nn.Module):
         if isinstance(self.conv2, Conv2dExt):
             self.conv2.post_process() 
 
-def change_layers(model, **kwargs):
+def change_layers(name_prefix, model, **kwargs):
     output = OrderedDict()
 
     for name, module in model.named_children():
+        this_prefix = name_prefix + "." + name if name_prefix != "" else name
         if isinstance(module, models.resnet.BasicBlock):
-            module = ExtendedBasicBlock(module, **kwargs)
+            module = ExtendedBasicBlock(this_prefix, module, **kwargs)
             
         if isinstance(module, nn.Sequential):
-            module = change_layers(module, **kwargs)
+            module = change_layers(this_prefix, module, **kwargs)
 
         if module is not None:
             output[name] = module
@@ -245,6 +273,11 @@ class ResNet18(torch.nn.Module):
         elif kwargs['name'] == 'resnet50':
             resnet = models.resnet50(pretrained=False)
 
+        bn_spec = kwargs["bn_spec"]
+        conv_spec = kwargs["conv_spec"]
+        log.info(bn_spec)
+        log.info(conv_spec)
+
         self.f = OrderedDict()
         for name, module in resnet.named_children():
             # print(name, module)
@@ -255,20 +288,19 @@ class ResNet18(torch.nn.Module):
                     module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
                 elif isinstance(module, nn.MaxPool2d):
                     module = None
+            # Get rid of the last Linear layer to extract the encoder. 
             if isinstance(module, nn.Linear):
                 module = None
+
+            if name == "conv1" and conv_spec["include_first_conv"]:
+                module = Conv2dExt(name, module, conv_spec)
 
             if module is not None:
                 self.f[name] = module
 
         # encoder
         self.encoder = nn.Sequential(self.f)
-
-        bn_spec = kwargs["bn_spec"]
-        conv_spec = kwargs["conv_spec"]
-        log.info(bn_spec)
-        log.info(conv_spec)
-        self.encoder = change_layers(self.encoder, bn_spec=bn_spec, conv_spec=conv_spec)
+        self.encoder = change_layers("", self.encoder, bn_spec=bn_spec, conv_spec=conv_spec)
         # print(self.encoder)
 
         self.feature_dim = resnet.fc.in_features
@@ -280,9 +312,11 @@ class ResNet18(torch.nn.Module):
         return self.projetion(h)
 
     def post_process(self):
-        for name, module in self.encoder.named_children():
-            if isinstance(module, nn.Sequential):
-                for name2, module2 in module.named_children():
-                    if isinstance(module2, ExtendedBasicBlock):
-                        module2.post_process()
-                
+        def go_through(m):
+            for name, module in m.named_children():
+                if isinstance(module, nn.Sequential):
+                    go_through(module)
+                elif hasattr(module, "post_process"):
+                    module.post_process()
+
+        go_through(self.encoder)

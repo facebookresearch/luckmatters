@@ -6,6 +6,7 @@ network:
     reset_freq: 100
     resample_ratio: 0.05
     layer_involved: conv1-conv2
+    include_first_conv: false
 
   bn_spec: 
     enable_bn1: True
