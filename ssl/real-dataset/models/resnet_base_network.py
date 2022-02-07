@@ -121,10 +121,12 @@ class Conv2dExt(nn.Module):
                         self.conv.bias[filter_idx] = -avg_norm / 2
 
             # log.info(f"Update conv2d weight. freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, loc_indices = {sel_indices} out of size {scores.size()}")
+            '''
             prompt = f"Conv2d[{self.name}] " + \
                      f"min/max filter grad = {sorted_stats[0]:.4e}/{sorted_stats[-1]:.4e}, " + \
                      f"avg selected = {sorted_stats[:self.num_sample].mean().item():.4e}"
             log.info(prompt)
+            '''
 
             # reset counters. 
             self.cnt = 0
