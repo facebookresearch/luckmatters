@@ -1,6 +1,7 @@
 import torchvision.models as models
 import torch.nn as nn
 import torch
+import random
 from models.mlp_head import MLPHead
 from collections import OrderedDict
 
@@ -9,9 +10,9 @@ from torch.distributions.categorical import Categorical
 import logging
 log = logging.getLogger(__file__)
 
-class Conv2dExt(nn.Module):
+class Conv2dExtSetIndependent(nn.Module):
     def __init__(self, name, conv, conv_spec):
-        super(Conv2dExt, self).__init__()
+        super(Conv2dExtSetIndependent, self).__init__()
         self.name = name
         self.conv = conv
         # Add a bunch of hook to monitor the input and gradInput.
@@ -24,7 +25,7 @@ class Conv2dExt(nn.Module):
 
         out_channels = self.conv.out_channels
         self.num_sample = int(self.conv_spec["resample_ratio"] * out_channels) 
-        log.info(f"Conv2dExt[{self.name}]: freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, change filter {self.num_sample} / {out_channels}")
+        log.info(f"Conv2dExtSetIndependent[{self.name}]: freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, change filter {self.num_sample} / {out_channels}")
 
     def _forward_hook(self, _, input, output):
         if not self.training:
@@ -133,6 +134,80 @@ class Conv2dExt(nn.Module):
             self.filter_grad_sqr.fill_(0)
             self._clean_up()
 
+class Conv2dExtSetDiff(nn.Module):
+    def __init__(self, name, conv, conv_spec):
+        super(Conv2dExtSetDiff, self).__init__()
+        self.name = name
+        self.conv = conv
+
+        # Add a bunch of hook to monitor the input and gradInput.
+        self.conv.register_forward_pre_hook(self._forward_prehook)
+        self.conv.register_backward_hook(self._backward_hook)
+
+        self.conv_spec = conv_spec
+        self.filter_grad_sqr = None
+        self.pairs_of_samples = None
+
+        log.info(f"Conv2dExtSetDiff[{self.name}] initialized.")
+
+    def _backward_hook(self, _, grad_input, grad_output):
+        if not self.training:
+            return
+
+        grad_output = grad_output[0]
+        with torch.no_grad():
+            # compute statistics. 
+            out_channels = self.conv.out_channels
+
+            # [batch, C, H, W]
+            this_filter_grad_sqr = grad_output.pow(2).sum(dim=(0,2,3))
+            if self.filter_grad_sqr is not None:
+                self.filter_grad_sqr += this_filter_grad_sqr 
+            else:
+                self.filter_grad_sqr = this_filter_grad_sqr 
+                assert self.filter_grad_sqr.size(0) == out_channels 
+
+        return None
+        
+    def _forward_prehook(self, _, input):
+        if not self.training or self.pairs_of_samples is None:
+            return
+
+        input = input[0]
+        kh, kw = self.conv.kernel_size
+        sh, sw = kh // 2, kw // 2
+        # input = input[:, :, sh:-sh,sw:-sw].contiguous()
+
+        out_channels = self.conv.out_channels
+        # average norm of weight. 
+        norms = self.conv.weight.view(out_channels, -1).norm(dim=1)
+        avg_norm = norms.mean()
+
+        with torch.no_grad():
+            sorted_stats, filter_indices = self.filter_grad_sqr.sort()
+            # For filter with the lowest gradient_at_output, we want to replace it with pairs of input patterns 
+            for k, (i, j) in zip(filter_indices.tolist(), self.pairs_of_samples):
+                # replace the filter with a random patch difference. 
+                # We can also pick the location where patch energy is maximized spatially. 
+                h_idx = random.randint(0, input.size(2) - kh)
+                w_idx = random.randint(0, input.size(3) - kw)
+
+                patch = input[i,:,h_idx:h_idx+kh, w_idx:w_idx+kw] - input[j,:,h_idx:h_idx+kh, w_idx:w_idx+kw] 
+                patch_norm = patch.norm()
+                if patch_norm >= 1e-6:
+                    patch = patch / patch_norm * avg_norm
+                    self.conv.weight[k,:,:,:] = patch
+                    if self.conv.bias is not None:
+                        self.conv.bias[k] = 0
+        
+        self.pairs_of_samples = None
+
+    def forward(self, x):
+        return self.conv(x)
+
+    def post_process(self, pairs_of_samples):
+        self.pairs_of_samples = pairs_of_samples
+
 
 # Customized BatchNorm
 class BatchNorm2dExt(nn.Module):
@@ -172,6 +247,8 @@ class BatchNorm2dExt(nn.Module):
             x = (x - self.running_mean[None,:,None,None]) / (self.running_var[None,:,None,None] + self.eps).sqrt()
 
         return x
+
+Conv2dExt = Conv2dExtSetDiff
 
 class ExtendedBasicBlock(nn.Module):
     expansion = 1
@@ -244,11 +321,11 @@ class ExtendedBasicBlock(nn.Module):
 
         return out
 
-    def post_process(self):
+    def post_process(self, *args, **kwargs):
         if isinstance(self.conv1, Conv2dExt):
-            self.conv1.post_process() 
+            self.conv1.post_process(*args, **kwargs) 
         if isinstance(self.conv2, Conv2dExt):
-            self.conv2.post_process() 
+            self.conv2.post_process(*args, **kwargs) 
 
 def change_layers(name_prefix, model, **kwargs):
     output = OrderedDict()
@@ -313,12 +390,12 @@ class ResNet18(torch.nn.Module):
         h = h.view(h.shape[0], h.shape[1])
         return self.projetion(h)
 
-    def post_process(self):
+    def post_process(self, *args, **kwargs):
         def go_through(m):
             for name, module in m.named_children():
                 if isinstance(module, nn.Sequential):
                     go_through(module)
                 elif hasattr(module, "post_process"):
-                    module.post_process()
+                    module.post_process(*args, **kwargs)
 
         go_through(self.encoder)

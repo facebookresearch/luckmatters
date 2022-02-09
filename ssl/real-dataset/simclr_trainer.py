@@ -7,6 +7,7 @@ from loss.nt_xent import NTXentLoss
 import re
 import os
 import shutil
+import random
 import sys
 
 import numpy as np
@@ -165,8 +166,15 @@ class SimCLRTrainer(object):
                     all_loss.backward()
 
                 self.optimizer.step()
-                self.model.post_process()
+
                 n_iter += 1
+                if n_iter % 100 == 0:
+                    N = xis.size(0)
+                    # randomly samples a few pairs. 
+                    sample_pairs = [(random.randint(0, N-1), random.randint(0, N-1)) for _ in range(5)]
+                    self.model.post_process(sample_pairs)
+                    # Do a forward.
+                    self.model(xis)
 
             # warmup for the first 10 epochs
             if epoch_counter >= 10:
