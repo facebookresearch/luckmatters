@@ -4,6 +4,7 @@ import torch
 import random
 from models.mlp_head import MLPHead
 from collections import OrderedDict
+import torch.nn.functional as F
 
 from torch.distributions.categorical import Categorical
 
@@ -20,6 +21,7 @@ class Conv2dExtBase(nn.Module):
 
         self.conv_spec = conv_spec
         self.filter_grad_sqr = None
+        self.relu_stats = None
         self.cnt = 0
 
     def _backward_hook(self, _, grad_input, grad_output):
@@ -32,11 +34,15 @@ class Conv2dExtBase(nn.Module):
             out_channels = self.conv.out_channels
 
             # [batch, C, H, W]
-            this_filter_grad_sqr = grad_output.pow(2).sum(dim=(0,2,3))
+            this_filter_grad_sqr = grad_output.pow(2).sum(dim=(0,2,3)).detach()
+            this_relu_stats = (grad_output.abs() > 1e-8).long().sum(dim=(0,2,3)).detach() 
+
             if self.filter_grad_sqr is not None:
                 self.filter_grad_sqr += this_filter_grad_sqr 
+                self.relu_stats += this_relu_stats
             else:
                 self.filter_grad_sqr = this_filter_grad_sqr 
+                self.relu_stats = this_relu_stats
                 assert self.filter_grad_sqr.size(0) == out_channels 
 
             self.cnt += 1
@@ -46,6 +52,7 @@ class Conv2dExtBase(nn.Module):
     def _clean_up(self):
         self.cnt = 0
         self.filter_grad_sqr.fill_(0)
+        self.relu_stats.fill_(0)
 
     def forward(self, x):
         return self.conv(x)
@@ -165,22 +172,34 @@ class Conv2dExtSetDiff(Conv2dExtBase):
         # input = input[:, :, sh:-sh,sw:-sw].contiguous()
 
         out_channels = self.conv.out_channels
-        # average norm of weight. 
-        norms = self.conv.weight.view(out_channels, -1).norm(dim=1)
-        avg_norm = norms.mean()
 
         with torch.no_grad():
+            # Compute the norm of local patches. 
+            uniform_weight = self.conv.weight[0].clone().fill_(1.0)
+            # Local sum
+            # local_energy = [batchsize, H - kH + 1, W - kW + 1]
+            local_energy = F.conv2d(input.pow(2), uniform_weight.unsqueeze(0)).squeeze(1).sqrt()
+            # sample from local energy
+            # average norm of weight. 
+            norms = self.conv.weight.view(out_channels, -1).norm(dim=1)
+            avg_norm = norms.mean()
+
             sorted_stats, filter_indices = self.filter_grad_sqr.sort()
+
             # For filter with the lowest gradient_at_output, we want to replace it with pairs of input patterns 
             indices = filter_indices.tolist()
             for k, (i, j) in zip(indices[:self.num_sample], self.pairs_of_samples):
                 # replace the filter with a random patch difference. 
                 # We can also pick the location where patch energy is maximized spatially. 
-                h_idx = random.randint(0, input.size(2) - kh)
-                w_idx = random.randint(0, input.size(3) - kw)
+                # score = [H - kH + 1, W - kW + 1]
+                score = (local_energy[i] + local_energy[j]) * 3 
+                sampler = Categorical(logits=score.view(-1)) 
+                loc_idx = sampler.sample().item()
 
-                #import pdb
-                #pdb.set_trace()
+                h_idx = loc_idx // score.size(1)
+                w_idx = loc_idx % score.size(1)
+                # h_idx = random.randint(0, input.size(2) - kh)
+                # w_idx = random.randint(0, input.size(3) - kw)
 
                 patch = input[i,:,h_idx:h_idx+kh, w_idx:w_idx+kw] - input[j,:,h_idx:h_idx+kh, w_idx:w_idx+kw] 
                 patch_norm = patch.norm()
