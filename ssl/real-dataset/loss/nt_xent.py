@@ -192,4 +192,4 @@ class NTXentLoss(torch.nn.Module):
         else:
             raise RuntimeError(f"Unknown loss_type = {loss_type}")
 
-        return loss, loss_intra
+        return loss, loss_intra, negatives.detach()

@@ -3,7 +3,7 @@ network:
   pretrained_path: None
   conv_spec:
     variant: regular
-    reset_freq: 100
+    freq: 100
     resample_ratio: 0.05
     layer_involved: conv1-conv2
     include_first_conv: false

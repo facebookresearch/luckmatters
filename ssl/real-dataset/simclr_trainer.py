@@ -71,8 +71,8 @@ class SimCLRTrainer(object):
         else:
             zs = None
 
-        loss, loss_intra = self.nt_xent_criterion(zis, zjs, zs)
-        return loss, loss_intra
+        loss, loss_intra, negative_sim = self.nt_xent_criterion(zis, zjs, zs)
+        return loss, loss_intra, zis, zjs, negative_sim
 
     def train(self, train_dataset):
         train_loader = DataLoader(train_dataset, batch_size=self.params["batch_size"] * torch.cuda.device_count(),
@@ -136,7 +136,7 @@ class SimCLRTrainer(object):
                 else:
                     xs = None
 
-                loss, loss_intra = self._step(self.model, xis, xjs, xs, n_iter)
+                loss, loss_intra, zis, zjs, negative_sim = self._step(self.model, xis, xjs, xs, n_iter)
 
                 # if n_iter % self.params['log_every_n_steps'] == 0:
                 #     self.writer.add_scalar('train_loss', loss, global_step=n_iter)
@@ -168,13 +168,9 @@ class SimCLRTrainer(object):
                 self.optimizer.step()
 
                 n_iter += 1
-                if n_iter % 100 == 0:
-                    N = xis.size(0)
-                    # randomly samples a few pairs. 
-                    sample_pairs = [(random.randint(0, N-1), random.randint(0, N-1)) for _ in range(5)]
-                    self.model.post_process(sample_pairs)
-                    # Do a forward.
-                    self.model(xis)
+                xs = torch.cat([xjs, xis], dim=0) 
+                zs = torch.cat([zjs.detach(), zis.detach()], dim=0)
+                self.model.special_call(xs, zs, negative_sim, n_iter)
 
             # warmup for the first 10 epochs
             if epoch_counter >= 10:
