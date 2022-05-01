@@ -1,11 +1,24 @@
 N: 1000
 batchsize: 128
 T: 0.1
-multi: 10
 seed: 1
 
-# output dimension of second layer (right before contrastive learning)
-output_d: 20
+model:
+  _target_: "bn_gen.Model"
+  multi: 10
+  # output dimension of second layer (right before contrastive learning)
+  output_d: 20
+  output_nonlinearity: false
+
+  w1_bias: false 
+  activation: relu
+  per_layer_normalize: false
+  shared_low_layer: false
+
+  bn_spec:
+    use_bn: true
+    backprop_mean: true
+    backprop_var: true
 
 # Data distribution: "AA**" means that the pattern is AA at the beginning, followed by other random patterns.
 #distributions = [ "AB***", "*BC**", "**CDE", "A****" ]
@@ -27,20 +40,12 @@ distri:
   pattern_cnt: 10 
   pattern_len: 5
 
-w1_bias: false 
 l2_type: regular
 loss_type: infoNCE
-activation: relu
 
 similarity: dotprod # or negdist
-per_layer_normalize: false
 
 niter: 5000
-
-bn_spec:
-  use_bn: true
-  backprop_mean: true
-  backprop_var: true
 
 opt:
   lr: 0.01

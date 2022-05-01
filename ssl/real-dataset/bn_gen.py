@@ -189,7 +189,15 @@ class BatchNormExt(nn.Module):
         return x
 
 class Model(nn.Module):
-    def __init__(self, d, K, d2, activation="relu", w1_bias=False, bn_spec=None, multi=5):
+    def __init__(self, d, K, 
+                 output_d=20, 
+                 activation="relu", 
+                 w1_bias=False, 
+                 bn_spec=None, 
+                 multi=5, 
+                 output_nonlinearity=False, 
+                 per_layer_normalize=False,
+                 shared_low_layer=False):
         super(Model, self).__init__()
         self.multi = multi
         # d = dimension, K = number of filters. 
@@ -203,7 +211,7 @@ class Model(nn.Module):
             raise RuntimeError(f"Unknown activation {activation}")
 
         self.K = K
-        self.w2 = nn.Linear(K * self.multi, d2, bias=False)
+        self.w2 = nn.Linear(K * self.multi, output_d, bias=False)
 
         self.bn_spec = bn_spec
         if self.bn_spec is not None and self.bn_spec.use_bn:
@@ -211,17 +219,43 @@ class Model(nn.Module):
         else:
             self.bn = None
 
-    def per_layer_normalize(self):
-        with torch.no_grad():
-            max_norm = 0
-            for w in self.w1:
-                max_norm = max(max_norm, w.weight.norm())
+        self.output_nonlinearity = output_nonlinearity
+        self.per_layer_normalize = per_layer_normalize
+        self.shared_low_layer = shared_low_layer
 
-            for w in self.w1:
-                w.weight[:] /= max_norm
-                if w.bias is not None:
-                    w.bias[:] /= max_norm
-            self.w2.weight[:] /= self.w2.weight.norm()
+    def post_process(self):
+        if self.per_layer_normalize:
+            with torch.no_grad():
+                max_norm = 0
+                for w in self.w1:
+                    max_norm = max(max_norm, w.weight.norm())
+
+                for w in self.w1:
+                    w.weight[:] /= max_norm
+                    if w.bias is not None:
+                        w.bias[:] /= max_norm
+                self.w2.weight[:] /= self.w2.weight.norm()
+
+        if self.shared_low_layer:
+            # Share across multiple w1
+            with torch.no_grad():
+                w_avg = self.w1[0].weight.clone()
+                for w in self.w1[1:]:
+                    w_avg += w.weight
+
+                w_avg /= len(self.w1)
+                for w in self.w1:
+                    w.weight[:] = w_avg
+
+                if self.w1[0].bias is not None:
+                    b_avg = self.w1[0].bias
+                    for w in self.w1[1:]:
+                        b_avg += w.bias
+
+                    b_avg /= len(self.w1)
+                    for w in self.w1:
+                        w.bias[:] = b_avg
+                        
     
     def forward(self, x):
         # x: #batch x K x d
@@ -240,7 +274,11 @@ class Model(nn.Module):
         if self.bn is not None:
             y = self.bn(y)
 
-        return self.w2(y)
+        y = self.w2(y)
+        if self.output_nonlinearity:
+            y = self.activation(y)
+
+        return y
     
 def pairwise_dist(x):
     # x: [N, d]
@@ -275,7 +313,7 @@ def check_result(config):
             if idx == -1:
                 continue
             energy_ratio = w[:,idx] / (w_norm + max(w.abs().max() / 1000, 1e-6))
-            if param_config["activation"] == "linear":
+            if param_config["model"]["activation"] == "linear":
                 energy_ratio = energy_ratio.abs()
             sorted_ratio, _ = energy_ratio.sort(descending=True)
             # top-3 average. 
@@ -319,9 +357,9 @@ def main(args):
     log.info(f"distributions: {distributions}")
 
     gen = Generator(distributions, mags)
-        
-    model = Model(gen.d, gen.K, args.output_d, w1_bias=args.w1_bias, activation=args.activation, bn_spec=args.bn_spec, multi=args.multi)
 
+    model = hydra.utils.instantiate(args.model, d=gen.d, K=gen.K)
+        
     if args.loss_type == "infoNCE":
         loss_func = nn.CrossEntropyLoss()
     elif args.loss_type == "quadratic":
@@ -388,8 +426,7 @@ def main(args):
         optimizer.step()
 
         # normalization
-        if args.per_layer_normalize:
-            model.per_layer_normalize()
+        model.post_process()
 
         model_q.append(deepcopy(model))
         if len(model_q) >= 3:
