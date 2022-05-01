@@ -89,10 +89,11 @@ _result_matcher = [
 ]
 
 _attr_multirun = {
-  "check_result" : {
-    "default": lambda subfolder: common_utils.MultiRunUtil.load_regex(subfolder, _result_matcher),
-    "entropy": check_edge_stats
+  "result_group" : {
+    "performance": ("event", _result_matcher),
+    "entropy": ("func", check_edge_stats),
   },
+  "default_result_group" : [ "performance" ],
   "default_metrics": [ "acc" ],
   "specific_options": dict(acc={}),
   "common_options" : dict(topk_mean=1, topk=10, descending=True),

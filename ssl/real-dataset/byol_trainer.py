@@ -237,9 +237,12 @@ class BYOLTrainer:
                     p[:] = (1 - alpha) * p[:] + alpha * w
 
     def compute_w_corr(self, M):
+        if self.balance_type == "direct" and self.dyn_convert == 1:
+            return M + self.dyn_eps * torch.eye(M.size(0)).to(M.device)
+
         if self.corr_eigen_decomp:
             if not self.predictor_signaling_2:
-                log.info("compute_w_corr: Use eigen_decomp!")
+                log.info(f"compute_w_corr: Use eigen_decomp of size {M.size()}")
             D, Q = torch.eig(M, eigenvectors=True)
             # Only use the real part. 
             D = D[:,0]

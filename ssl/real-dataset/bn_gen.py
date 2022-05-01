@@ -15,35 +15,56 @@ import common_utils
 import logging
 log = logging.getLogger(__file__)
 
-def gen_distribution(distri):
-    if distri.specific is not None:
-        return [ [ord(t) - ord('A') if t != '*' else -1 for t in v] for v in distri.specific.split("-") ]
+class Distribution:
+    def __init__(self, distri):
+        if distri.specific is not None:
+            return [ [ Distribution.letter2idx(t) for t in v] for v in distri.specific.split("-") ]
 
-    # Generate the distribution. 
-    tokens_per_loc = []
-    token_indices = list(range(distri.num_tokens))
-    for i in range(distri.num_loc):
-        # For each location, pick tokens. 
-        random.shuffle(token_indices)
-        tokens_per_loc.append(token_indices[:distri.num_tokens_per_pos])
+        # Generate the distribution. 
+        tokens_per_loc = []
+        token_indices = list(range(distri.num_tokens))
+        for i in range(distri.num_loc):
+            # For each location, pick tokens. 
+            random.shuffle(token_indices)
+            tokens_per_loc.append(token_indices[:distri.num_tokens_per_pos])
 
-    distributions = []
-    loc_indices = list(range(distri.num_loc))
-    for i in range(distri.pattern_cnt):
-        # pick locations.
-        random.shuffle(loc_indices)
+        distributions = []
+        loc_indices = list(range(distri.num_loc))
+        for i in range(distri.pattern_cnt):
+            # pick locations.
+            random.shuffle(loc_indices)
 
-        pattern = [-1] * distri.num_loc
-        # for each loc, pick which token to choose. 
-        for l in loc_indices[:distri.pattern_len]:
-            pattern[l] = random.choice(tokens_per_loc[l])
+            pattern = [-1] * distri.num_loc
+            # for each loc, pick which token to choose. 
+            for l in loc_indices[:distri.pattern_len]:
+                pattern[l] = random.choice(tokens_per_loc[l])
 
-        distributions.append(pattern)
+            distributions.append(pattern)
 
-    return distributions
+        self.distributions = distributions
+        self.tokens_per_loc = tokens_per_loc
+        self.num_tokens = distri.num_tokens
+        self.num_loc = distri.num_loc
 
-class Generator:
-    def __init__(self, distrib, magnitudes):
+    @classmethod
+    def letter2idx(cls, t):
+        return ord(t) - ord('A') if t != '*' else -1
+
+    @classmethod
+    def idx2letter(cls, i):
+        return '-' if i == -1 else chr(ord('A') + i) 
+
+    def symbol_freq(self):
+        counts = defaultdict(Counter)
+        for pattern in self.distributions:
+            for k, d in enumerate(pattern):
+                counts[k][d] += 1
+
+        # counts[k][d] is the frequency of symbol d (in terms of index) appears at index k
+        return counts
+
+    def __repr__(self):
+        # visualize the distribution
         '''
         -1 = wildcard
 
@@ -52,9 +73,24 @@ class Generator:
             [-1, -1, 1, 4, 2]
         ]
         '''
+        s = f"#Tokens: {self.num_tokens}, #Loc: {self.num_loc}, Tokens per loc: {[len(a) for a in self.tokens_per_loc]}\n"
+        s += "patterns: \n"
+        for pattern in self.distributions:
+            s += "  " + "".join([Distribution.idx2letter(a) for a in pattern]) + "\n"
+        counts = self.symbol_freq()
+        for k in range(self.num_loc):
+            s += f"At loc {k}: " + ",".join([f"{Distribution.idx2letter(idx)}={cnt}" for idx, cnt in counts[k].items() if idx != -1]) + "\n"
+        s += "\n"
+        return s 
+        
+    def sample(self, n):
+        return random.choices(self.distributions, k=n)
 
+
+class Generator:
+    def __init__(self, distrib : Distribution, magnitudes):
         self.distrib = distrib
-        self.K = len(self.distrib[0])
+        self.K = distrib.num_loc 
         
         self.num_symbols = magnitudes.size(0)
         # i-th column is the embedding for i-th symbol. 
@@ -77,7 +113,7 @@ class Generator:
         return x
     
     def sample(self, n):
-        tokens = random.choices(self.distrib, k=n)
+        tokens = self.distrib.sample(n)
         ground_tokens1 = self._ground_tokens(tokens)
         ground_tokens2 = self._ground_tokens(tokens)
 
@@ -211,11 +247,7 @@ def check_result(subfolder):
     distributions = torch.load(os.path.join(subfolder, "distributions.pth"))
     config = common_utils.MultiRunUtil.load_full_cfg(subfolder)
 
-    counts = defaultdict(Counter)
-
-    for pattern in distributions:
-        for k, d in enumerate(pattern):
-            counts[k][d] += 1
+    counts = distributions.symbol_freq() 
     K = len(counts)
 
     res = {
@@ -266,8 +298,9 @@ def main(args):
     log.info(common_utils.print_info(args))
     common_utils.set_all_seeds(args.seed)
 
-    distributions = gen_distribution(args.distri)
-    mags = torch.rand(args.distri.num_tokens)*3 + 1
+    distributions = Distribution(args.distri)
+    # mags = torch.rand(args.distri.num_tokens)*3 + 1
+    mags = torch.ones(args.distri.num_tokens)
     log.info(f"mags: {mags}")
     log.info(f"distributions: {distributions}")
 
@@ -281,7 +314,7 @@ def main(args):
         # Quadratic loss
         loss_func = lambda x, label: - (1 + 1 / x.size(0)) * x[torch.LongTensor(range(x.size(0))),label].mean() + x.mean() 
     else:
-        raise RuntimeError(f"Unknown loss_type = {loss_type}")
+        raise RuntimeError(f"Unknown loss_type = {args.loss_type}")
 
     label = torch.LongTensor(range(args.batchsize))
 
