@@ -54,6 +54,17 @@ class Distribution:
     def idx2letter(cls, i):
         return '-' if i == -1 else chr(ord('A') + i) 
 
+    def save(self, filename):
+        torch.save(self.__dict__, filename)
+
+    @classmethod
+    def load(cls, filename):
+        data = torch.load(filename)
+        obj = cls.__new__(Distribution)
+        for k, v in data.items():
+            setattr(obj, k, v)
+        return obj
+
     def symbol_freq(self):
         counts = defaultdict(Counter)
         for pattern in self.distributions:
@@ -237,23 +248,21 @@ def pairwise_dist(x):
     norms = x.pow(2).sum(dim=1)
     return norms[:,None] + norms[None,:] - 2 * (x @ x.t())
 
-def check_result(subfolder):
+def check_result(config):
+    subfolder = config["folder"]
     model_files = glob.glob(os.path.join(subfolder, "model-*.pth"))
     # Find the latest.
     model_files = [ (os.path.getmtime(f), f) for f in model_files ]
     model_file = sorted(model_files, key=lambda x: -x[0])[0][1]
     
     model = torch.load(model_file)
-    distributions = torch.load(os.path.join(subfolder, "distributions.pth"))
-    config = common_utils.MultiRunUtil.load_full_cfg(subfolder)
+    distributions = Distribution.load(os.path.join(subfolder, "distributions.pth"))
+    param_config = common_utils.MultiRunUtil.load_full_cfg(subfolder)
 
     counts = distributions.symbol_freq() 
     K = len(counts)
 
-    res = {
-        "folder": subfolder,
-        "modified_since": 0
-    }
+    res = deepcopy(config)
 
     all_means = []
     topk = 1
@@ -266,7 +275,7 @@ def check_result(subfolder):
             if idx == -1:
                 continue
             energy_ratio = w[:,idx] / (w_norm + max(w.abs().max() / 1000, 1e-6))
-            if config["activation"] == "linear":
+            if param_config["activation"] == "linear":
                 energy_ratio = energy_ratio.abs()
             sorted_ratio, _ = energy_ratio.sort(descending=True)
             # top-3 average. 
@@ -289,8 +298,13 @@ def check_result(subfolder):
     return [ res ]
 
 _attr_multirun = {
-    "check_result": check_result,
-    "metric_info": lambda _: dict(descending=True, topk_mean=1, topk=10) 
+  "result_group" : {
+    "trained_match": ("func", check_result),
+  },
+  "default_result_group" : [ "trained_match" ],
+  "default_metrics": [ "loc_all" ],
+  "specific_options": dict(loc_all={}),
+  "common_options" : dict(topk_mean=1, topk=10, descending=True),
 }
 
 @hydra.main(config_path="config", config_name="bn_gen.yaml")
@@ -384,10 +398,9 @@ def main(args):
     log.info(f"Final loss = {loss.item()}")
     log.info(f"Save to model-final.pth")
     torch.save(model.state_dict(), "model-final.pth")
+    distributions.save("distributions.pth")
 
-    torch.save(distributions, "distributions.pth")
-
-    log.info(check_result(os.path.abspath("./")))
+    log.info(check_result(dict(folder=os.path.abspath("./"))))
 
 
 if __name__ == '__main__':

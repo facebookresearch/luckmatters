@@ -6,8 +6,8 @@ run_analysis=$1
 shift
 
 if [ "$run_analysis" -eq "1" ]; then
-  python ~/tools2/analyze.py $logdir --num_process 32 --result_group "*" 
+  python ~/tools2/analyze.py $logdir --num_process 32 
 fi
 
-echo python ~/tools2/stats.py $logdir --key_stats $key_stat --groups / "$@"
+echo python ~/tools2/stats.py $logdir 
 python ~/tools2/stats.py $logdir --groups / "$@"
