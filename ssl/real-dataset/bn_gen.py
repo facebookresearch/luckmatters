@@ -445,8 +445,8 @@ def main(args):
     multi = args.model.multi 
     if args.beta is not None:
         # beta will override multi
-        multi = args.beta * distributions.tokens_per_loc
-        log.info("beta overrides multi: multi [{multi}] = tokens_per_loc [{distributions.tokens_per_loc}] x beta [{args.beta}]")
+        multi = args.beta * args.distri.num_tokens_per_pos
+        log.info(f"beta overrides multi: multi [{multi}] = tokens_per_loc [{args.distri.num_tokens_per_pos}] x beta [{args.beta}]")
 
     model = hydra.utils.instantiate(args.model, d=gen.d, K=gen.K, multi=multi)
         
