@@ -307,7 +307,7 @@ def check_result(config):
     distributions = Distribution.load(os.path.join(subfolder, "distributions.pth"))
     param_config = common_utils.MultiRunUtil.load_full_cfg(subfolder)
 
-    is_linear = ("model" in param_config and param_config["model"]["activation"] == "linear") or param_config["activation"] == "linear" 
+    is_linear = ("model" in param_config and param_config["model"]["activation"] == "linear") or param_config.get("activation", "") == "linear" 
 
     counts = distributions.symbol_freq() 
     K = len(counts)
