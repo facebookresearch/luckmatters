@@ -8,6 +8,8 @@ from collections import Counter, defaultdict, deque
 
 from copy import deepcopy
 
+from omegaconf import OmegaConf
+
 import torch.nn.functional as F
 import glob
 import common_utils
@@ -131,7 +133,7 @@ class Generator:
         x1 = self._symbol2embedding(ground_tokens1)
         x2 = self._symbol2embedding(ground_tokens2)
                 
-        return x1, x2, ground_tokens1, ground_tokens2
+        return x1, x2, ground_tokens1, ground_tokens2, tokens
     
 # customized l2 normalization
 class SpecializedL2Regularizer(torch.autograd.Function):
@@ -200,6 +202,7 @@ class Model(nn.Module):
                  shared_low_layer=False):
         super(Model, self).__init__()
         self.multi = multi
+
         # d = dimension, K = number of filters. 
         self.w1 = nn.ModuleList([nn.Linear(d, self.multi, bias=w1_bias) for _ in range(K)])
         
@@ -269,16 +272,19 @@ class Model(nn.Module):
         
         # y: #batch x K x self.multi
         y = self.activation(y).reshape(x.size(0), -1)
+        # After that y becomes [#batch, K * self.multi]
         # print(y.size())
         
         if self.bn is not None:
-            y = self.bn(y)
+            z = self.bn(y)
+        else:
+            z = y
 
-        y = self.w2(y)
+        z = self.w2(z)
         if self.output_nonlinearity:
-            y = self.activation(y)
+            z = self.activation(z)
 
-        return y
+        return z, y
     
 def pairwise_dist(x):
     # x: [N, d]
@@ -286,16 +292,22 @@ def pairwise_dist(x):
     norms = x.pow(2).sum(dim=1)
     return norms[:,None] + norms[None,:] - 2 * (x @ x.t())
 
-def check_result(config):
-    subfolder = config["folder"]
+def load_latest_model(subfolder):
     model_files = glob.glob(os.path.join(subfolder, "model-*.pth"))
     # Find the latest.
     model_files = [ (os.path.getmtime(f), f) for f in model_files ]
     model_file = sorted(model_files, key=lambda x: -x[0])[0][1]
     
-    model = torch.load(model_file)
+    return torch.load(model_file)
+
+
+def check_result(config):
+    subfolder = config["folder"]
+    model = load_latest_model(subfolder)
     distributions = Distribution.load(os.path.join(subfolder, "distributions.pth"))
     param_config = common_utils.MultiRunUtil.load_full_cfg(subfolder)
+
+    is_linear = ("model" in param_config and param_config["model"]["activation"] == "linear") or param_config["activation"] == "linear" 
 
     counts = distributions.symbol_freq() 
     K = len(counts)
@@ -313,7 +325,7 @@ def check_result(config):
             if idx == -1:
                 continue
             energy_ratio = w[:,idx] / (w_norm + max(w.abs().max() / 1000, 1e-6))
-            if param_config["model"]["activation"] == "linear":
+            if is_linear:
                 energy_ratio = energy_ratio.abs()
             sorted_ratio, _ = energy_ratio.sort(descending=True)
             # top-3 average. 
@@ -335,13 +347,85 @@ def check_result(config):
     # return a list of dict
     return [ res ]
 
+def compute_scores(responses, gt, values):
+    # responses: [bs, M_signals]
+    # gt_signal: [bs]
+    responses = responses - responses.mean(dim=0, keepdim=True)
+    responses = responses / (responses.norm(dim=0, keepdim=True) + 1e-8)
+    scores = torch.FloatTensor(len(values))
+    for i, v in enumerate(values):
+        gt_signal = (gt == v).float()
+        gt_signal = gt_signal - gt_signal.mean()
+        gt_signal_norm = gt_signal.norm()
+        corrs = responses.t() @ gt_signal / (gt_signal_norm + 1e-8)
+        # Given corrs, we take max
+        scores[i] = corrs.max()
+
+    return scores
+
+def check_result2(config):
+    # Use activation correlation to compute. 
+    subfolder = config["folder"]
+    model_params = load_latest_model(subfolder)
+    distributions = Distribution.load(os.path.join(subfolder, "distributions.pth"))
+    
+    mags = torch.ones(distributions.num_tokens)
+    gen = Generator(distributions, mags)
+
+    args = common_utils.MultiRunUtil.load_omega_conf(subfolder)
+
+    if hasattr(args, "model"):
+        model = hydra.utils.instantiate(args.model, d=gen.d, K=gen.K)
+    else:
+        model = Model(d=gen.d, K=gen.K, 
+                      output_d=args.output_d, 
+                      w1_bias=args.w1_bias, 
+                      activation=args.activation, 
+                      bn_spec=args.bn_spec, 
+                      multi=args.multi, 
+                      output_nonlinearity=getattr(args, "output_nonlinearity", False)) 
+
+    model.load_state_dict(model_params)
+
+    batchsize = 10240
+    x1, x2, gt_token1, gt_token2, tokens = gen.sample(batchsize)
+
+    z1, hidden1 = model(x1)
+    hidden1 = hidden1.view(batchsize, model.K, model.multi)
+    hidden_activated = (hidden1 > 1e-6).float() 
+
+    gt_token1 = torch.LongTensor(gt_token1)
+    tokens = torch.LongTensor(tokens)
+
+    res = deepcopy(config)
+
+    # Check all correlations. 
+    all_means = []
+    for k in range(model.K):
+        scores = compute_scores(hidden_activated[:,k,:], gt_token1[:,k], distributions.tokens_per_loc[k])
+        res[f"l1_{k}"] = this_mean = scores.mean().item()
+        all_means.append(this_mean)
+    
+    res["l1_all"] = torch.FloatTensor(all_means).mean().item()
+
+    # Top layer.
+    z1_activated = (z1 > 1e-6).float()
+    all_means_top = compute_scores(z1_activated, tokens, range(len(distributions.distributions)))
+    for k, v in enumerate(all_means_top): 
+        res[f"l2_{k}"] = v.item()
+    
+    res["l2_all"] = all_means_top.mean().item() 
+
+    return [ res ]
+
 _attr_multirun = {
   "result_group" : {
     "trained_match": ("func", check_result),
+    "trained_match2": ("func", check_result2)
   },
-  "default_result_group" : [ "trained_match" ],
-  "default_metrics": [ "loc_all" ],
-  "specific_options": dict(loc_all={}),
+  "default_result_group" : [ "trained_match", "trained_match2" ],
+  "default_metrics": [ "loc_all", "l1_all", "l2_all" ],
+  "specific_options": dict(loc_all={}, l1_all={}, l2_all={}),
   "common_options" : dict(topk_mean=1, topk=10, descending=True),
 }
 
@@ -358,7 +442,13 @@ def main(args):
 
     gen = Generator(distributions, mags)
 
-    model = hydra.utils.instantiate(args.model, d=gen.d, K=gen.K)
+    multi = args.model.multi 
+    if args.beta is not None:
+        # beta will override multi
+        multi = args.beta * distributions.tokens_per_loc
+        log.info("beta overrides multi: multi [{multi}] = tokens_per_loc [{distributions.tokens_per_loc}] x beta [{args.beta}]")
+
+    model = hydra.utils.instantiate(args.model, d=gen.d, K=gen.K, multi=multi)
         
     if args.loss_type == "infoNCE":
         loss_func = nn.CrossEntropyLoss()
@@ -386,10 +476,10 @@ def main(args):
     for t in range(args.niter):
         optimizer.zero_grad()
         
-        x1, x2, _, _ = gen.sample(args.batchsize)
+        x1, x2, _, _, _ = gen.sample(args.batchsize)
         
-        z1 = model(x1)
-        z2 = model(x2)
+        z1, _ = model(x1)
+        z2, _ = model(x2)
 
         # #batch x output_dim
         # Then we compute the infoNCE. 

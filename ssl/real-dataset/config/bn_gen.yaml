@@ -5,7 +5,7 @@ seed: 1
 
 model:
   _target_: "bn_gen.Model"
-  multi: 10
+  multi: null  # if null, then we determine this with beta, the degree of over-parameterization.  
   # output dimension of second layer (right before contrastive learning)
   output_d: 20
   output_nonlinearity: false
@@ -42,6 +42,7 @@ distri:
 
 l2_type: regular
 loss_type: infoNCE
+beta: 1
 
 similarity: dotprod # or negdist
 
