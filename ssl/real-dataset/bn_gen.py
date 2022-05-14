@@ -297,7 +297,7 @@ def load_latest_model(subfolder):
     # Find the latest.
     model_files = [ (os.path.getmtime(f), f) for f in model_files ]
     model_file = sorted(model_files, key=lambda x: -x[0])[0][1]
-    
+
     return torch.load(model_file)
 
 
@@ -423,8 +423,8 @@ _attr_multirun = {
     "trained_match": ("func", check_result),
     "trained_match2": ("func", check_result2)
   },
-  "default_result_group" : [ "trained_match", "trained_match2" ],
-  "default_metrics": [ "loc_all", "l1_all", "l2_all" ],
+  "default_result_group" : ["trained_match"], # [ "trained_match", "trained_match2" ],
+  "default_metrics": ["loc_all"], # [ "loc_all", "l1_all", "l2_all" ],
   "specific_options": dict(loc_all={}, l1_all={}, l2_all={}),
   "common_options" : dict(topk_mean=1, topk=10, descending=True),
 }
@@ -436,7 +436,13 @@ def main(args):
 
     distributions = Distribution(args.distri)
     # mags = torch.rand(args.distri.num_tokens)*3 + 1
-    mags = torch.ones(args.distri.num_tokens)
+    # 
+    mags = torch.ones(args.distri.num_tokens) 
+    # Pick the first batch, make them low and second one make them higher.
+    mags[:args.distri.num_tokens//2] /= args.distri.mag_split
+    mags[args.distri.num_tokens//2:] *= args.distri.mag_split
+    # mags = torch.rand(args.distri.num_tokens) * args.distri.mag_sigma 
+
     log.info(f"mags: {mags}")
     log.info(f"distributions: {distributions}")
 
@@ -526,9 +532,9 @@ def main(args):
     log.info(f"Save to model-final.pth")
     torch.save(model.state_dict(), "model-final.pth")
     distributions.save("distributions.pth")
+    torch.save(mags, "mags.pth")
 
     log.info(check_result(dict(folder=os.path.abspath("./"))))
-
 
 if __name__ == '__main__':
     main()
