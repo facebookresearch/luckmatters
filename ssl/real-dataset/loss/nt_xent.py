@@ -123,6 +123,7 @@ class NTXentLoss(torch.nn.Module):
             r_neg = 1 - negatives
             r_pos = 1 - positives
 
+            # w only depends on r_neg
             w = r_neg.detach().pow(alpha_exponent)
             if alpha_type == "exp":
                 w = (-w / temperature).exp()
@@ -142,10 +143,19 @@ class NTXentLoss(torch.nn.Module):
             # New version of dual
             # dist_diff = d_i^2 - d_{ij}^2 
             dist_sqr = negatives - positives
+            # w = dist_sqr.detach().pow(alpha_exponent)
 
-            w = dist_sqr.detach().pow(alpha_exponent)
+            r_neg = 1 - negatives
+            r_pos = 1 - positives
+            # w only depends on r_neg
+            w = r_neg.detach().pow(alpha_exponent)
+
             if alpha_type == "exp":
                 w = (w / temperature).exp()
+            elif alpha_type == "quadratic":
+                w = quadratic_assignment(w, temperature)
+            elif alpha_type == "inverse":
+                w = inverse_assignment(w, temperature, inverse_exponent)
             else:
                 raise RuntimeError(f"Unknown alpha_type = {alpha_type}")
 
