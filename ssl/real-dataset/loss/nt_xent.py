@@ -88,6 +88,7 @@ class NTXentLoss(torch.nn.Module):
         temperature = self.params["temperature"]
         beta = self.params["beta"]
         loss_type = self.params["loss_type"]
+        alpha_eps = self.params["alpha_eps"]
         alpha_exponent = self.params["alpha_exponent"]
         alpha_type = self.params["alpha_type"]
         inverse_exponent = self.params["inverse_exponent"]
@@ -136,6 +137,24 @@ class NTXentLoss(torch.nn.Module):
             w_pos = w.sum(dim=1, keepdim=True)
             loss = (w_pos * r_pos - (w * r_neg).sum(dim=1)).mean()
             loss_intra = beta * (w_pos * r_pos).mean()
+
+        elif loss_type == "dual2":
+            # New version of dual
+            # dist_diff = d_i^2 - d_{ij}^2 
+            dist_sqr = negatives - positives
+
+            w = dist_sqr.detach().pow(alpha_exponent)
+            if alpha_type == "exp":
+                w = (w / temperature).exp()
+            else:
+                raise RuntimeError(f"Unknown alpha_type = {alpha_type}")
+
+            # The below is actually mean(w * (r_pos - r_neg)) = mean(w * (negatives - positives)) = mean(w * dist_sqr)
+            # Get summation. 
+            w_Z = w.sum(dim=1, keepdim=True)
+            w = w / (w_Z + alpha_eps * w.size(1)) 
+            loss = (w * dist_sqr).sum(dim=1).mean()
+            loss_intra = 0
 
         elif loss_type == "dual_backprop":
             # 1 - sim = dist
