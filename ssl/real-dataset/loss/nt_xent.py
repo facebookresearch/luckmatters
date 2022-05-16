@@ -151,7 +151,7 @@ class NTXentLoss(torch.nn.Module):
             w = r_neg.detach().pow(alpha_exponent)
 
             if alpha_type == "exp":
-                w = (w / temperature).exp()
+                w = (-w / temperature).exp()
             elif alpha_type == "quadratic":
                 w = quadratic_assignment(w, temperature)
             elif alpha_type == "inverse":
