@@ -43,6 +43,7 @@ distri:
 
 l2_type: regular
 loss_type: infoNCE
+aug: true
 beta: 1
 
 similarity: dotprod # or negdist
