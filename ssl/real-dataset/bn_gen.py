@@ -300,6 +300,21 @@ def load_latest_model(subfolder):
 
     return torch.load(model_file)
 
+def compute_score(keys, w, is_linear, topk=1):
+    w_norm = w.norm(dim=1)
+    means = []
+    for idx in keys:
+        if idx == -1:
+            continue
+        energy_ratio = w[:,idx] / (w_norm + max(w.abs().max() / 1000, 1e-6))
+        if is_linear:
+            energy_ratio = energy_ratio.abs()
+        sorted_ratio, _ = energy_ratio.sort(descending=True)
+        # top-3 average. 
+        means.append(sorted_ratio[:topk].mean().item())
+
+    return torch.FloatTensor(means).mean().item()
+
 
 def check_result(config):
     subfolder = config["folder"]
@@ -315,26 +330,27 @@ def check_result(config):
     res = deepcopy(config)
 
     all_means = []
+    all_means_other = []
     topk = 1
     for k in range(K):
         w = model[f"w1.{k}.weight"].detach()
-        w_norm = w.norm(dim=1)
 
-        means = []
-        for idx in counts[k].keys():
-            if idx == -1:
-                continue
-            energy_ratio = w[:,idx] / (w_norm + max(w.abs().max() / 1000, 1e-6))
-            if is_linear:
-                energy_ratio = energy_ratio.abs()
-            sorted_ratio, _ = energy_ratio.sort(descending=True)
-            # top-3 average. 
-            means.append(sorted_ratio[:topk].mean().item())
+        candidates = list(counts[k].keys()) 
+        this_mean = compute_score(candidates, w, is_linear, topk=topk)
 
-        res[f"loc{k}"] = this_mean = torch.FloatTensor(means).mean().item()
+        others = [a for a in range(distributions.num_tokens) if a not in candidates]
+        this_mean_other = compute_score(others, w, is_linear, topk=topk)
+
+        res[f"loc{k}"] = this_mean 
+        res[f"loc_other{k}"] = this_mean_other 
+
         all_means.append(this_mean)
-    
+        all_means_other.append(this_mean_other)
+
+        ## Also count the matching score for the tokens out of this 
+
     res["loc_all"] = torch.FloatTensor(all_means).mean().item()
+    res["loc_other_all"] = torch.FloatTensor(all_means_other).mean().item()
 
         # print(f"{key}/{idx}: ratio: {}")
         # plt.imshow(model.w1[k].weight.detach().numpy())
@@ -424,7 +440,8 @@ _attr_multirun = {
     "trained_match2": ("func", check_result2)
   },
   "default_result_group" : ["trained_match"], # [ "trained_match", "trained_match2" ],
-  "default_metrics": ["loc_all"], # [ "loc_all", "l1_all", "l2_all" ],
+  "default_metrics": ["loc_all", "loc_other_all"], # [ "loc_all", "l1_all", "l2_all" ],
+  # "default_metrics": ["local_other_all"], # [ "loc_all", "l1_all", "l2_all" ],
   "specific_options": dict(loc_all={}, l1_all={}, l2_all={}),
   "common_options" : dict(topk_mean=1, topk=10, descending=True),
 }
@@ -483,15 +500,19 @@ def main(args):
         optimizer.zero_grad()
         
         x1, x2, _, _, _ = gen.sample(args.batchsize)
-        
+
         z1, _ = model(x1)
-        z2, _ = model(x2)
-
-        # #batch x output_dim
-        # Then we compute the infoNCE. 
         z1 = l2_reg(z1)
-        z2 = l2_reg(z2)
 
+        if args.aug:
+            z2, _ = model(x2)
+            # #batch x output_dim
+            z2 = l2_reg(z2)
+        else:
+            # no augmentation
+            z2 = z1
+
+        # Then we compute the infoNCE. 
         if args.similarity == "dotprod":
             # nbatch x nbatch, minus pairwise distance, or inner_prod matrix. 
             M = z1 @ z1.t()
