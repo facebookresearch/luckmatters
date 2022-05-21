@@ -39,6 +39,11 @@ distri:
   # For pattern [ "CA***", "*BC**", "C**DA", "C*E**" ], we have pattern_cnt = 4, pattern_len = 5
   pattern_cnt: 10 
   pattern_len: 5
+
+generator:
+  _target_: "bn_gen.Generator"
+  # How many wildcard needs to be replaced in the augmentation?
+  aug_degree: 5 
   mag_split: 1
 
 l2_type: regular

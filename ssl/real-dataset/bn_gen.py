@@ -44,6 +44,7 @@ class Distribution:
             distributions.append(pattern)
 
         self.distributions = distributions
+        self.pattern_len = distri.pattern_len
         self.tokens_per_loc = tokens_per_loc
         self.num_tokens = distri.num_tokens
         self.num_loc = distri.num_loc
@@ -101,13 +102,27 @@ class Distribution:
 
 
 class Generator:
-    def __init__(self, distrib : Distribution, magnitudes):
+    def __init__(self, distrib : Distribution, mag_split = 1, aug_degree = 5):
         self.distrib = distrib
         self.K = distrib.num_loc 
+
+        assert aug_degree <= self.K - distrib.pattern_len, f"Aug Degree [{aug_degree}] should <= K [{self.K}] - pattern_len [{distrib.pattern_len}]"
         
-        self.num_symbols = magnitudes.size(0)
+        self.num_symbols = distrib.num_tokens 
+        self.aug_degree = aug_degree
+
+        # mags = torch.rand(args.distri.num_tokens)*3 + 1
+        # 
+        mags = torch.ones(self.num_symbols)
+        # Pick the first batch, make them low and second one make them higher.
+        mags[:self.num_symbols//2] /= mag_split
+        mags[self.num_symbols//2:] *= mag_split
+        # mags = torch.rand(args.distri.num_tokens) * args.distri.mag_sigma 
+
+        log.info(f"mags: {mags}")
+
         # i-th column is the embedding for i-th symbol. 
-        self.symbol_embedding = magnitudes.diag() #torch.eye(self.num_symbols)
+        self.symbol_embedding = mags.diag() #torch.eye(self.num_symbols)
         self.d = self.num_symbols
         
     def _ground_symbol(self, a):
@@ -116,11 +131,29 @@ class Generator:
     
     def _ground_tokens(self, tokens):
         return [ [self._ground_symbol(a) for a in token] for token in tokens ]
+
+    def _change_wildcard_tokens(self, tokens_with_wildcard, ground_tokens):
+        # Pick a subset of wildcard tokens to change. 
+        ground_tokens2 = []
+        for token_with_wildcard, ground_token in zip(tokens_with_wildcard, ground_tokens):
+            wildcard_indices = [ i for i, t in enumerate(token_with_wildcard) if t == -1 ] 
+            random.shuffle(wildcard_indices)
+
+            ground_token2 = list(ground_token)
+            for idx in wildcard_indices[:self.aug_degree]:
+                # Replace with another one. 
+                ground_token2[idx] = self._ground_symbol(-1)
+
+            ground_tokens2.append(ground_token2)
+
+        return ground_tokens2
     
     def _symbol2embedding(self, tokens):
         # From symbols to embedding. 
         x = torch.FloatTensor(len(tokens), self.K, self.symbol_embedding.size(0))
+        # For each sample in the batch
         for i, token in enumerate(tokens):
+            # For each receptive field 
             for j, a in enumerate(token):
                 x[i, j, :] = self.symbol_embedding[:, a]
         return x
@@ -128,7 +161,8 @@ class Generator:
     def sample(self, n):
         tokens = self.distrib.sample(n)
         ground_tokens1 = self._ground_tokens(tokens)
-        ground_tokens2 = self._ground_tokens(tokens)
+        # ground_tokens2 = self._ground_tokens(tokens)
+        ground_tokens2 = self._change_wildcard_tokens(tokens, ground_tokens1)
 
         x1 = self._symbol2embedding(ground_tokens1)
         x2 = self._symbol2embedding(ground_tokens2)
@@ -384,11 +418,10 @@ def check_result2(config):
     subfolder = config["folder"]
     model_params = load_latest_model(subfolder)
     distributions = Distribution.load(os.path.join(subfolder, "distributions.pth"))
-    
-    mags = torch.ones(distributions.num_tokens)
-    gen = Generator(distributions, mags)
 
     args = common_utils.MultiRunUtil.load_omega_conf(subfolder)
+    
+    gen = hydra.utils.instantiate(args.generator, distributions)
 
     if hasattr(args, "model"):
         model = hydra.utils.instantiate(args.model, d=gen.d, K=gen.K)
@@ -452,18 +485,9 @@ def main(args):
     common_utils.set_all_seeds(args.seed)
 
     distributions = Distribution(args.distri)
-    # mags = torch.rand(args.distri.num_tokens)*3 + 1
-    # 
-    mags = torch.ones(args.distri.num_tokens) 
-    # Pick the first batch, make them low and second one make them higher.
-    mags[:args.distri.num_tokens//2] /= args.distri.mag_split
-    mags[args.distri.num_tokens//2:] *= args.distri.mag_split
-    # mags = torch.rand(args.distri.num_tokens) * args.distri.mag_sigma 
-
-    log.info(f"mags: {mags}")
     log.info(f"distributions: {distributions}")
 
-    gen = Generator(distributions, mags)
+    gen = hydra.utils.instantiate(args.generator, distributions)
 
     multi = args.model.multi 
     if args.beta is not None:
@@ -553,7 +577,6 @@ def main(args):
     log.info(f"Save to model-final.pth")
     torch.save(model.state_dict(), "model-final.pth")
     distributions.save("distributions.pth")
-    torch.save(mags, "mags.pth")
 
     log.info(check_result(dict(folder=os.path.abspath("./"))))
 
