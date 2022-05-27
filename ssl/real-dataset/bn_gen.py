@@ -13,6 +13,7 @@ from omegaconf import OmegaConf
 import torch.nn.functional as F
 import glob
 import common_utils
+import pickle
 
 import logging
 log = logging.getLogger(__file__)
@@ -102,7 +103,7 @@ class Distribution:
 
 
 class Generator:
-    def __init__(self, distrib : Distribution, mag_split = 1, aug_degree = 5):
+    def __init__(self, distrib : Distribution, mag_split = 1, aug_degree = 5, d = None):
         self.distrib = distrib
         self.K = distrib.num_loc 
 
@@ -118,12 +119,22 @@ class Generator:
         mags[:self.num_symbols//2] /= mag_split
         mags[self.num_symbols//2:] *= mag_split
         # mags = torch.rand(args.distri.num_tokens) * args.distri.mag_sigma 
+        self.mags = mags
+        log.info(f"mags: {self.mags}")
 
-        log.info(f"mags: {mags}")
+        if d is None:
+            d = self.num_symbols
+        self.d = d
 
-        # i-th column is the embedding for i-th symbol. 
-        self.symbol_embedding = mags.diag() #torch.eye(self.num_symbols)
-        self.d = self.num_symbols
+        if self.d == self.num_symbols:
+            # i-th column is the embedding for i-th symbol. 
+            self.symbol_embedding = torch.eye(self.d)
+        else:
+            # random vector generation. 
+            log.info(f"Generating non-orthogonal embeddings. d = {self.d}, #tokens = {self.num_symbols}")
+            embeds = torch.randn(self.d, self.num_symbols)
+            embeds = embeds / embeds.norm(dim=0, keepdim=True) 
+            self.symbol_embedding = embeds
         
     def _ground_symbol(self, a):
         # replace any wildcard in token with any symbols.
@@ -150,12 +161,12 @@ class Generator:
     
     def _symbol2embedding(self, tokens):
         # From symbols to embedding. 
-        x = torch.FloatTensor(len(tokens), self.K, self.symbol_embedding.size(0))
+        x = torch.FloatTensor(len(tokens), self.K, self.d)
         # For each sample in the batch
         for i, token in enumerate(tokens):
             # For each receptive field 
             for j, a in enumerate(token):
-                x[i, j, :] = self.symbol_embedding[:, a]
+                x[i, j, :] = self.symbol_embedding[:, a] * self.mags[a]
         return x
     
     def sample(self, n):
@@ -334,7 +345,27 @@ def load_latest_model(subfolder):
 
     return torch.load(model_file)
 
+def load_distri_gen(subfolder):
+    args = common_utils.MultiRunUtil.load_omega_conf(subfolder)
+    distri_file = os.path.join(subfolder, "distributions.pth")
+
+    if os.path.exists(distri_file):
+        try: 
+            distributions = torch.load(distri_file)
+        except:
+            distributions = Distribution.load(distri_file)
+
+    gen_file = os.path.join(subfolder, "gen.pth")
+    if os.path.exists(gen_file):
+        gen = torch.load(gen_file)
+    else:
+        gen = hydra.utils.instantiate(args.generator, distributions)
+
+    return distributions, gen, args
+
+
 def compute_score(keys, w, is_linear, topk=1):
+    # w: [#weights, projection onto #token embeddings]
     w_norm = w.norm(dim=1)
     means = []
     for idx in keys:
@@ -353,9 +384,10 @@ def compute_score(keys, w, is_linear, topk=1):
 def check_result(config):
     subfolder = config["folder"]
     model = load_latest_model(subfolder)
-    distributions = Distribution.load(os.path.join(subfolder, "distributions.pth"))
     param_config = common_utils.MultiRunUtil.load_full_cfg(subfolder)
 
+    distributions, gen, args = load_distri_gen(subfolder)
+        
     is_linear = ("model" in param_config and param_config["model"]["activation"] == "linear") or param_config.get("activation", "") == "linear" 
 
     counts = distributions.symbol_freq() 
@@ -368,7 +400,10 @@ def check_result(config):
     topk = 1
     for k in range(K):
         w = model[f"w1.{k}.weight"].detach()
+        # Then we project the weight to the ground-truth embedding matrix. 
+        w = w @ gen.symbol_embedding 
 
+        # Then we check
         candidates = list(counts[k].keys()) 
         this_mean = compute_score(candidates, w, is_linear, topk=topk)
 
@@ -417,11 +452,8 @@ def check_result2(config):
     # Use activation correlation to compute. 
     subfolder = config["folder"]
     model_params = load_latest_model(subfolder)
-    distributions = Distribution.load(os.path.join(subfolder, "distributions.pth"))
 
-    args = common_utils.MultiRunUtil.load_omega_conf(subfolder)
-    
-    gen = hydra.utils.instantiate(args.generator, distributions)
+    distributions, gen, args = load_distri_gen(subfolder)
 
     if hasattr(args, "model"):
         model = hydra.utils.instantiate(args.model, d=gen.d, K=gen.K)
@@ -576,7 +608,9 @@ def main(args):
     log.info(f"Final loss = {loss.item()}")
     log.info(f"Save to model-final.pth")
     torch.save(model.state_dict(), "model-final.pth")
-    distributions.save("distributions.pth")
+
+    torch.save(distributions, "distributions.pth")
+    torch.save(gen, "gen.pth")
 
     log.info(check_result(dict(folder=os.path.abspath("./"))))
 

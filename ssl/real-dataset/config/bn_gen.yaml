@@ -31,7 +31,7 @@ distri:
   # Number of locations. E.g., for CA***, num_loc = 5
   num_loc: 10
   # Number of tokens at each location, e.g., 8 = ABCDEFGH
-  # The dimension of the embedding for now is the same as num_tokens 
+  # num_tokens / num_symbols 
   num_tokens: 8
   # Number of tokens allowed at each location.  
   num_tokens_per_pos: 2
@@ -45,6 +45,9 @@ generator:
   # How many wildcard needs to be replaced in the augmentation?
   aug_degree: 5 
   mag_split: 1
+  # embedding dimension. if null, then it is the same as num_token and all embedding vectors are unit vector.
+  # otherwise we will create non-orthogonal embedding vectors.  
+  d: null
 
 l2_type: regular
 loss_type: infoNCE
