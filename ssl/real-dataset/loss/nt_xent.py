@@ -92,6 +92,7 @@ class NTXentLoss(torch.nn.Module):
         alpha_exponent = self.params["alpha_exponent"]
         alpha_type = self.params["alpha_type"]
         inverse_exponent = self.params["inverse_exponent"]
+        low_rank = self.params["low_rank"]
 
         if loss_type == "exact_cov":
             # 1 - sim = dist
@@ -185,12 +186,19 @@ class NTXentLoss(torch.nn.Module):
             r_pos = 1 - positives
 
             w = (-r_neg.detach() / temperature).exp() 
+            # Do an SVD for the weight. 
+            U, D, V = torch.svd(w,compute_uv=True)
+            D[low_rank:] = 0
+            w_low_rank = U @ D.diag() @ V.t() 
+
+            ''' 
             # get approximate low rank decomposition. 
             sample_importance = w.mean(dim=1)
             #sample_importance = sample_importance / sample_importance.sum()
             similarity_matrix_low_rank = torch.outer(sample_importance, sample_importance)
-
             w_low_rank = similarity_matrix_low_rank[self.mask_samples_from_same_repr].view(2 * self.batch_size, -1)
+            '''
+
             w_pos_low_rank = w_low_rank.sum(dim=1, keepdim=True) 
 
             # The below is actually mean(w_low_rank * (r_pos - r_neg))

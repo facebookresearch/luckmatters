@@ -75,12 +75,13 @@ trainer:
     use_cosine_similarity: True
     beta: 0
     add_one_in_neg: false
-    loss_type: default
+    loss_type: default # Can be exact_cov, dual, dual2, dual_backprop, dual_lowrank 
     exact_cov_unaug_sim: false
     alpha_type: exp # or poly
     alpha_exponent: 1 # 1 = square loss. 
     alpha_eps: 0.1
     inverse_exponent: 1
+    low_rank: null
 
   l2_reg_type: regular
 
