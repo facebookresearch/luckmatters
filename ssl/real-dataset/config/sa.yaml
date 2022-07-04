@@ -1,0 +1,14 @@
+niter: 3000
+seed: 1
+
+# number of tokens
+M: 10
+# dimension of embedding
+d: 5
+# batchsize
+batchsize: 128
+
+opt:
+  lr: 0.1
+  momentum: 0.9
+  wd: 5e-4
