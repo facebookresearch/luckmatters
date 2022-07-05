@@ -3,6 +3,8 @@ seed: 1
 
 # number of tokens
 M: 10
+# Length of the sequence
+L: 10
 # dimension of embedding
 d: 5
 # batchsize

@@ -6,6 +6,8 @@ import random
 import common_utils
 import hydra
 
+import os
+
 import logging
 log = logging.getLogger(__file__)
 
@@ -58,7 +60,7 @@ class Model(nn.Module):
         return loss, sel_output
 
 class Dataset:
-    def __init__(self, M, num_seg, seg_len):
+    def __init__(self, M, L, seg_len):
         # Number of tokens
         self.M = M
 
@@ -69,18 +71,23 @@ class Dataset:
         for i in range(self.nclass):
             self.classes.append(list(range(i * seg, (i + 1) * seg)))
 
-        self.num_seg = num_seg
         self.seg_len = seg_len
-        self.L = num_seg * seg_len 
+        self.L = L
 
     def generate(self, batchsize):
         x = torch.LongTensor(batchsize, self.L)
         for i in range(batchsize):
-            for j in range(self.num_seg):
+            start = 0
+            while start < self.L:
+                # sample seg length. 
+                this_seg_len = random.randint(1, min(self.seg_len, self.L - start))
+
                 # pick a class
                 class_id = random.randint(0, self.nclass - 1)
                 # random choose tokens from the class.
-                x[i, j*self.seg_len:(j+1)*self.seg_len] = torch.LongTensor(random.choices(self.classes[class_id], k=self.seg_len)) 
+                x[i, start:start+this_seg_len] = torch.LongTensor(random.choices(self.classes[class_id], k=this_seg_len)) 
+                # j*self.seg_len:(j+1)*self.seg_len]
+                start += this_seg_len
 
         return x
     
@@ -89,8 +96,8 @@ def main(args):
     log.info(common_utils.print_info(args))
     common_utils.set_all_seeds(args.seed)
 
-    dataset = Dataset(args.M, num_seg=3, seg_len=3)
-    model = Model(args.M, dataset.L, args.d)
+    dataset = Dataset(args.M, args.L, seg_len=3)
+    model = Model(args.M, args.L, args.d)
 
     optimizer = torch.optim.SGD(model.parameters(), lr=args.opt.lr, momentum=args.opt.momentum, weight_decay=args.opt.wd)
 
@@ -99,7 +106,7 @@ def main(args):
 
         x = dataset.generate(args.batchsize)
         # Randomly mask some entry
-        mask = torch.LongTensor(random.choices(list(range(dataset.L)), k=args.batchsize))
+        mask = torch.LongTensor(random.choices(list(range(x.size(1))), k=args.batchsize))
         
         loss, _ = model(x, mask)
         if t % 100 == 0:
@@ -113,11 +120,15 @@ def main(args):
 
     log.info("Embedding:")
     log.info(model.embedding.weight)
-    log.info(model.embedding.weight @ model.embedding.weight.t())
+    # log.info(model.embedding.weight @ model.embedding.weight.t())
 
     log.info("Positional Embedding:")
     log.info(model.positional_embedding.weight)
-    log.info(model.positional_embedding.weight @ model.positional_embedding.weight.t())
+    # log.info(model.positional_embedding.weight @ model.positional_embedding.weight.t())
+
+    torch.save(model.state_dict(), "final.pth")
+
+    log.info(os.getcwd())
 
 if __name__ == '__main__':
     main()
