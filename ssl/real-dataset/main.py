@@ -49,6 +49,9 @@ def main(args):
     elif args["dataset"] == "cifar10":
         train_dataset = datasets.CIFAR10(args.dataset_path, train=True, download=True,
                                     transform=MultiViewDataInjector([data_transform, data_transform, data_transform_identity]))
+    elif args["dataset"] == "cifar100":
+        train_dataset = datasets.CIFAR100(args.dataset_path, train=True, download=True,
+                                    transform=MultiViewDataInjector([data_transform, data_transform, data_transform_identity]))
     else:
         raise RuntimeError(f"Unknown dataset! {args['dataset']}")
 

@@ -371,7 +371,7 @@ class ResNet18(torch.nn.Module):
         self.f = OrderedDict()
         for name, module in resnet.named_children():
             # print(name, module)
-            if dataset == "cifar10":
+            if dataset in ["cifar10", "cifar100"]:
                 # For cifar10, we use smaller kernel size in conv2d and no max pooling according to SimCLR paper (Appendix B.9) 
                 # https://arxiv.org/pdf/2002.05709.pdf
                 if name == 'conv1':

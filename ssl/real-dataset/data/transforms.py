@@ -19,7 +19,8 @@ def get_simclr_data_transforms_train(dataset_name, args):
                     transforms.ToTensor()
                 ])
 
-    elif dataset_name == "cifar10":
+    elif dataset_name in ["cifar10", "cifar100"]:
+        # No Gaussian blur since cifar10/100 images is small. 
         return transforms.Compose(
                 [
                     transforms.RandomResizedCrop(32),
@@ -33,7 +34,7 @@ def get_simclr_data_transforms_train(dataset_name, args):
         raise RuntimeError(f"unknown dataset: {dataset_name}")
 
 def get_simclr_data_transforms_test(dataset_name):
-    if dataset_name == "cifar10":
+    if dataset_name in ["cifar10", "cifar100"]:
         return transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
