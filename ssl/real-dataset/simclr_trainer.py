@@ -75,7 +75,7 @@ class SimCLRTrainer(object):
         return loss, loss_intra, zis, zjs, negative_sim
 
     def train(self, train_dataset):
-        train_loader = DataLoader(train_dataset, batch_size=self.params["batch_size"] * torch.cuda.device_count(),
+        train_loader = DataLoader(train_dataset, batch_size=self.params["batch_size"] * (torch.cuda.device_count() if torch.cuda.is_available() else 1), 
                                   num_workers=self.params["num_workers"], drop_last=True, shuffle=False)
 
         model_checkpoints_folder = os.path.join(self.writer.log_dir, 'checkpoints')

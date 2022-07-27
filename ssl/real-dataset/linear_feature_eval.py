@@ -62,8 +62,13 @@ class Evaluator:
                                         transform=data_transforms)
             test_dataset = datasets.CIFAR10(dataset_path, train=False, download=False,
                                         transform=data_transforms)
+        elif dataset == "cifar100":
+            train_dataset = datasets.CIFAR100(dataset_path, train=True, download=False,
+                                        transform=data_transforms)
+            test_dataset = datasets.CIFAR100(dataset_path, train=False, download=False,
+                                        transform=data_transforms)
         else:
-            raise RuntimeError(f"Unknown dataset! {args['dataset']}")
+            raise RuntimeError(f"Unknown dataset! {dataset}")
 
         log.info(f"Input shape: {train_dataset[0][0].shape}")
 
@@ -82,9 +87,6 @@ class Evaluator:
 
         device = self.device
         encoder = encoder.to(device)
-
-        logreg = LogisticRegression(output_feature_dim, 10)
-        logreg = logreg.to(device)
 
         encoder.eval()
         x_train, y_train = get_features_from_encoder(encoder, self.stl_train_loader, device)
@@ -109,6 +111,9 @@ class Evaluator:
 
         train_loader, test_loader = create_data_loaders_from_arrays(torch.from_numpy(x_train), y_train,
                                                                     torch.from_numpy(x_test), y_test)
+
+        logreg = LogisticRegression(output_feature_dim, train_loader.dataset.tensors[1].max() + 1)
+        logreg = logreg.to(device)
 
         optimizer = torch.optim.Adam(logreg.parameters(), lr=3e-4, weight_decay=1e-3)
         criterion = torch.nn.CrossEntropyLoss()
