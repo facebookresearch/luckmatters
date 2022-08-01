@@ -68,7 +68,7 @@ class Conv2dExtSetIndependent(Conv2dExtBase):
 
         out_channels = self.conv.out_channels
         self.num_sample = int(self.conv_spec["resample_ratio"] * out_channels) 
-        log.info(f"Conv2dExtSetIndependent[{self.name}]: freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, change filter {self.num_sample} / {out_channels}")
+        log.debug(f"Conv2dExtSetIndependent[{self.name}]: freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, change filter {self.num_sample} / {out_channels}")
 
     def _forward_hook(self, _, input, output):
         if not self.change_weight_this_round:
@@ -138,12 +138,12 @@ class Conv2dExtSetIndependent(Conv2dExtBase):
                     if self.conv.bias is not None:
                         self.conv.bias[filter_idx] = -avg_norm / 2
 
-            # log.info(f"Update conv2d weight. freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, loc_indices = {sel_indices} out of size {scores.size()}")
+            # log.debug(f"Update conv2d weight. freq = {self.conv_spec['reset_freq']}, ratio = {self.conv_spec['resample_ratio']}, loc_indices = {sel_indices} out of size {scores.size()}")
             '''
             prompt = f"Conv2d[{self.name}] " + \
                      f"min/max filter grad = {sorted_stats[0]:.4e}/{sorted_stats[-1]:.4e}, " + \
                      f"avg selected = {sorted_stats[:self.num_sample].mean().item():.4e}"
-            log.info(prompt)
+            log.debug(prompt)
             '''
             # reset counters. 
             self.change_weight_this_round = False
@@ -160,7 +160,7 @@ class Conv2dExtSetDiff(Conv2dExtBase):
 
         out_channels = self.conv.out_channels
         self.num_sample = int(self.conv_spec["resample_ratio"] * out_channels) 
-        log.info(f"Conv2dExtSetDiff[{self.name}] initialized. change filter {self.num_sample} / {out_channels}")
+        log.debug(f"Conv2dExtSetDiff[{self.name}] initialized. change filter {self.num_sample} / {out_channels}")
 
     def _forward_prehook(self, _, input):
         if not self.training or self.pairs_of_samples is None:
@@ -294,7 +294,7 @@ class ExtendedBasicBlock(nn.Module):
         else:
             raise RuntimeError(f"Unknown bn_variant! {bn_variant}")
 
-        log.info(f"ExtendedBasicBlock: BN set to be {bn_variant}")
+        log.debug(f"ExtendedBasicBlock: BN set to be {bn_variant}")
 
         conv_variant = self.conv_spec["variant"]
         if conv_variant == "resample":
@@ -307,7 +307,7 @@ class ExtendedBasicBlock(nn.Module):
         else:
             raise RuntimeError(f"Unknown conv_variant! {conv_variant}")
 
-        log.info(f"ExtendedBasicBlock: Conv set to be {conv_variant}")
+        log.debug(f"ExtendedBasicBlock: Conv set to be {conv_variant}")
 
     def forward(self, x):
         identity = x
@@ -440,7 +440,7 @@ class ResNet18(torch.nn.Module):
                     dst_idx += 1
 
             sim = torch.dot(zs[src_idx], zs[dst_idx])
-            log.info(f"[{n_iter}] N = {N}, src_idx = {src_idx}, dst_idx = {dst_idx}, idx = {idx}, Sim = {sim.item()}, sim2 = {sim2.item()}")
+            log.debug(f"[{n_iter}] N = {N}, src_idx = {src_idx}, dst_idx = {dst_idx}, idx = {idx}, Sim = {sim.item()}, sim2 = {sim2.item()}")
 
             samples.append(xs[src_idx])
             samples.append(xs[dst_idx])
