@@ -93,6 +93,12 @@ class Model(nn.Module):
             self.activation = nn.ReLU()
         elif activation == "linear":
             self.activation = lambda x : x
+        elif activation == "leakyrelu":
+            self.activation = nn.LeakyReLU(negative_slope=0.05)
+        elif activation == "sigmoid":
+            self.activation = nn.Sigmoid()
+        elif activation == "quadratic":
+            self.activation = lambda x: x.pow(2)
         else:
             raise RuntimeError(f"Unknown activation {activation}")
 
