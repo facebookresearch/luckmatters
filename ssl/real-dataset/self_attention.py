@@ -39,7 +39,7 @@ class Model(nn.Module):
 
         # [L, d]
         pos_input = self.positional_embedding(locs)
-        attentions = attentions + (pos_input @ pos_input.t()).unsqueeze(0) 
+        attentions = attentions.detach() + (pos_input @ pos_input.t()).unsqueeze(0) 
         attentions = F.softmax(attentions / math.sqrt(2*self.d), dim=2)
 
         # output of size (bs, L, d)
@@ -51,9 +51,15 @@ class Model(nn.Module):
         # Then we compute the inner product with all embeddings.
         # [bs, M]
         inner_prod = sel_output @ self.embedding(tokens).t() # / math.sqrt(self.d)
-
         target = x.gather(1, mask_idx.unsqueeze(1)).squeeze()
         loss = F.nll_loss(F.log_softmax(inner_prod, dim=1), target)
+
+        '''
+        # [Update] we compute the inner product with all embeddings within the sequence. 
+        # [bs, L]
+        inner_prod = torch.bmm(self.embedding(x), sel_output.unsqueeze(2)).squeeze(2) # / math.sqrt(self.d)
+        loss = F.nll_loss(F.log_softmax(inner_prod, dim=1), mask_idx)
+        '''
 
         # gt_output = self.embedding(target)
 
