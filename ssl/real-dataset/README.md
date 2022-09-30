@@ -146,7 +146,7 @@ Yuandong Tian, Xinlei Chen, Surya Ganguli
 
 Yuandong Tian
 
-[arXiv](https://arxiv.org/abs/2201.12680)
+[NeurIPS'22](https://arxiv.org/abs/2201.12680)
 
 [4] Understanding the Role of Nonlinearity in Training Dynamics of Contrastive Learning
 
