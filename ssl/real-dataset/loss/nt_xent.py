@@ -70,6 +70,25 @@ class NTXentLoss(torch.nn.Module):
         v = self._cosine_similarity(x.unsqueeze(1), y.unsqueeze(0))
         return v
 
+    def _process_pairwise_dist(self, dist):
+        temperature = self.params["temperature"]
+        alpha_exponent = self.params["alpha_exponent"]
+        alpha_type = self.params["alpha_type"]
+        inverse_exponent = self.params["inverse_exponent"]
+
+        w = dist.pow(alpha_exponent)
+
+        if alpha_type == "exp":
+            w = (-w / temperature).exp()
+        elif alpha_type == "quadratic":
+            w = quadratic_assignment(w, temperature)
+        elif alpha_type == "inverse":
+            w = inverse_assignment(w, temperature, inverse_exponent)
+        else:
+            raise RuntimeError(f"Unknown alpha_type = {alpha_type}")
+
+        return w
+
     def forward(self, zis, zjs, zs):
         # Two towers. For each of the N samples, it has zj and zi. 
         representations = torch.cat([zjs, zis], dim=0)
@@ -89,9 +108,6 @@ class NTXentLoss(torch.nn.Module):
         beta = self.params["beta"]
         loss_type = self.params["loss_type"]
         alpha_eps = self.params["alpha_eps"]
-        alpha_exponent = self.params["alpha_exponent"]
-        alpha_type = self.params["alpha_type"]
-        inverse_exponent = self.params["inverse_exponent"]
         low_rank = self.params["low_rank"]
 
         if loss_type == "exact_cov":
@@ -125,15 +141,7 @@ class NTXentLoss(torch.nn.Module):
             r_pos = 1 - positives
 
             # w only depends on r_neg
-            w = r_neg.detach().pow(alpha_exponent)
-            if alpha_type == "exp":
-                w = (-w / temperature).exp()
-            elif alpha_type == "quadratic":
-                w = quadratic_assignment(w, temperature)
-            elif alpha_type == "inverse":
-                w = inverse_assignment(w, temperature, inverse_exponent)
-            else:
-                raise RuntimeError(f"Unknown alpha_type = {alpha_type}")
+            w = self._process_pairwise_dist(r_neg.detach())
 
             # The below is actually mean(w * (r_pos - r_neg))
             w_pos = w.sum(dim=1, keepdim=True)
@@ -148,17 +156,9 @@ class NTXentLoss(torch.nn.Module):
 
             r_neg = 1 - negatives
             r_pos = 1 - positives
-            # w only depends on r_neg
-            w = r_neg.detach().pow(alpha_exponent)
 
-            if alpha_type == "exp":
-                w = (-w / temperature).exp()
-            elif alpha_type == "quadratic":
-                w = quadratic_assignment(w, temperature)
-            elif alpha_type == "inverse":
-                w = inverse_assignment(w, temperature, inverse_exponent)
-            else:
-                raise RuntimeError(f"Unknown alpha_type = {alpha_type}")
+            # w only depends on r_neg
+            w = self._process_pairwise_dist(r_neg.detach())
 
             # The below is actually mean(w * (r_pos - r_neg)) = mean(w * (negatives - positives)) = mean(w * dist_sqr)
             # Get summation. 
@@ -167,14 +167,31 @@ class NTXentLoss(torch.nn.Module):
             loss = (w * dist_sqr).sum(dim=1).mean()
             loss_intra = 0
 
+        elif loss_type == "dual_per_sample":
+            # New version of dual
+            # dist_diff = d_i^2 - d_{ij}^2 
+            dist_sqr = negatives - positives
+            # w = dist_sqr.detach().pow(alpha_exponent)
+
+            r_neg = 1 - negatives
+            r_pos = 1 - positives
+
+            # w only depends on r_neg
+            w = self._process_pairwise_dist(r_neg.detach())
+
+            w = w.sum(dim=1, keepdim=True)
+            # now w is rank one.
+            loss = (w * dist_sqr).sum(dim=1).mean()
+            loss_intra = 0
+
         elif loss_type == "dual_backprop":
             # 1 - sim = dist
             r_neg = 1 - negatives
             r_pos = 1 - positives
 
-            w = r_neg.pow(alpha_exponent)
-            if alpha_type == "exp":
-                w = (-w / temperature).exp()
+            # w only depends on r_neg
+            w = self._process_pairwise_dist(r_neg.detach())
+
             # The below is actually mean(w * (r_pos - r_neg))
             w_pos = w.sum(dim=1, keepdim=True)
             loss = (w_pos * r_pos - (w * r_neg).sum(dim=1)).mean()
