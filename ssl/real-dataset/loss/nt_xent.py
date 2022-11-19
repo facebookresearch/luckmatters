@@ -180,6 +180,8 @@ class NTXentLoss(torch.nn.Module):
             w = self._process_pairwise_dist(r_neg.detach())
 
             w = w.sum(dim=1, keepdim=True)
+            # Normalize across samples
+            w = w / w.sum()
             # now w is rank one.
             loss = (w * dist_sqr).sum(dim=1).mean()
             loss_intra = 0
