@@ -178,7 +178,7 @@ from torch.utils.data.dataloader import DataLoader
 def get_mnist_transform():
     return transforms.Compose(
         [
-            transforms.RandomResizedCrop((28,28), scale=(0.9, 1.0), ratio=(0.9, 1.1)),
+            # transforms.RandomResizedCrop((28,28), scale=(0.9, 1.0), ratio=(0.9, 1.1)),
             transforms.ToTensor(),
         ])
 
@@ -196,9 +196,21 @@ class MNISTGenerator:
     def __init__(self, args):
         transform = get_mnist_transform()
         self.train_dataset = datasets.MNIST(args.dataset_path, train=True, download=True, transform=MultiViewDataInjector([transform, transform]))
-        self.train_loader = DataLoader(self.train_dataset, batch_size=args.batchsize, num_workers=4, drop_last=True, shuffle=False)
+        self.train_loader = DataLoader(self.train_dataset, batch_size=args.batchsize, num_workers=1, drop_last=True, shuffle=True)
+        self.K_side = 2
+        self.d_side = 14
+        self.d = self.d_side * self.d_side
+        self.K = self.K_side * self.K_side
     
     def __iter__(self):
-        for (x1s, x2s), labels in self.train_loader:
-            yield x1s, x2s, dict(labels=labels) 
+        while True:
+            for (x1s, x2s), labels in self.train_loader:
+                # Flattern x1s and x2s
+                #x1s = x1s.view(-1, 1, 7, 4, 7, 4).permute(0, 1, 3, 5, 2, 4).reshape(-1, self.K, self.d)
+                #x2s = x2s.view(-1, 1, 7, 4, 7, 4).permute(0, 1, 3, 5, 2, 4).reshape(-1, self.K, self.d)
+                x1s = x1s.view(-1, 1, self.K_side, self.d_side, self.K_side, self.d_side).permute(0, 1, 2, 4, 3, 5).reshape(-1, self.K, self.d)
+                x2s = x2s.view(-1, 1, self.K_side, self.d_side, self.K_side, self.d_side).permute(0, 1, 2, 4, 3, 5).reshape(-1, self.K, self.d)
+                yield x1s, x2s, dict(labels=labels) 
+
+            print("Dataset end, restart (and reshuffle)")
          

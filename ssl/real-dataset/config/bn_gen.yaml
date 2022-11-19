@@ -50,6 +50,7 @@ generator:
   d: null
 
 dataset_path: "/checkpoint/yuandong/datasets"
+dataset: null
 
 l2_type: regular
 loss_type: infoNCE

@@ -365,16 +365,19 @@ def main(args):
     log.info(common_utils.print_info(args))
     common_utils.set_all_seeds(args.seed)
 
-    distributions = Distribution(args.distri)
-    log.info(f"distributions: {distributions}")
-
-    gen = hydra.utils.instantiate(args.generator, distributions, args.batchsize)
-
-    multi = args.model.multi 
-    if args.beta is not None:
-        # beta will override multi
-        multi = args.beta * args.distri.num_tokens_per_pos
-        log.info(f"beta overrides multi: multi [{multi}] = tokens_per_loc [{args.distri.num_tokens_per_pos}] x beta [{args.beta}]")
+    if args.dataset == "mnist":
+        gen = MNISTGenerator(args)
+        multi = 10 * args.beta 
+        log.info(f"Direct using {args.dataset}, multi = {multi}")
+    else:
+        distributions = Distribution(args.distri)
+        log.info(f"distributions: {distributions}")
+        gen = hydra.utils.instantiate(args.generator, distributions, args.batchsize)
+        multi = args.model.multi 
+        if args.beta is not None:
+            # beta will override multi
+            multi = args.beta * args.distri.num_tokens_per_pos
+            log.info(f"beta overrides multi: multi [{multi}] = tokens_per_loc [{args.distri.num_tokens_per_pos}] x beta [{args.beta}]")
 
     model = hydra.utils.instantiate(args.model, d=gen.d, K=gen.K, multi=multi)
         
@@ -461,10 +464,10 @@ def main(args):
     log.info(f"Save to model-final.pth")
     torch.save(model.state_dict(), "model-final.pth")
 
-    torch.save(distributions, "distributions.pth")
-    torch.save(gen, "gen.pth")
-
-    log.info(check_result(dict(folder=os.path.abspath("./"))))
+    if args.dataset is None:
+        torch.save(distributions, "distributions.pth")
+        torch.save(gen, "gen.pth")
+        log.info(check_result(dict(folder=os.path.abspath("./"))))
 
 if __name__ == '__main__':
     main()
