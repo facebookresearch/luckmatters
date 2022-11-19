@@ -174,7 +174,7 @@ class Model(nn.Module):
             z = self.activation(z)
 
         return z, y
-    
+ 
 def pairwise_dist(x):
     # x: [N, d]
     # ret: [N, N]
@@ -203,7 +203,7 @@ def load_distri_gen(subfolder):
     if os.path.exists(gen_file):
         gen = torch.load(gen_file)
     else:
-        gen = hydra.utils.instantiate(args.generator, distributions)
+        gen = hydra.utils.instantiate(args.generator, distributions, args.batchsize)
 
     return distributions, gen, args
 
@@ -313,7 +313,12 @@ def check_result2(config):
     model.load_state_dict(model_params)
 
     batchsize = 10240
-    x1, x2, gt_token1, gt_token2, tokens = gen.sample(batchsize)
+    gen.set_batchsize(batchsize)
+    for x1, x2, infos in gen:
+        gt_token1 = infos["ground_tokens1"]
+        gt_token2 = infos["ground_tokens2"]
+        tokens = infos["tokens"]
+        break
 
     z1, hidden1 = model(x1)
     hidden1 = hidden1.view(batchsize, model.K, model.multi)
@@ -363,7 +368,7 @@ def main(args):
     distributions = Distribution(args.distri)
     log.info(f"distributions: {distributions}")
 
-    gen = hydra.utils.instantiate(args.generator, distributions)
+    gen = hydra.utils.instantiate(args.generator, distributions, args.batchsize)
 
     multi = args.model.multi 
     if args.beta is not None:
@@ -396,10 +401,9 @@ def main(args):
 
     model_q = deque([deepcopy(model)])
 
-    for t in range(args.niter):
+    t = 0
+    for x1, x2, _ in gen:
         optimizer.zero_grad()
-        
-        x1, x2, _, _, _ = gen.sample(args.batchsize)
 
         z1, _ = model(x1)
         z1 = l2_reg(z1)
@@ -448,6 +452,10 @@ def main(args):
         model_q.append(deepcopy(model))
         if len(model_q) >= 3:
             model_q.popleft()
+
+        t += 1
+        if t >= args.niter:
+            break
         
     log.info(f"Final loss = {loss.item()}")
     log.info(f"Save to model-final.pth")

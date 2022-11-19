@@ -90,9 +90,10 @@ class Distribution:
 
 
 class Generator:
-    def __init__(self, distrib : Distribution, mag_split = 1, aug_degree = 5, d = None):
+    def __init__(self, distrib : Distribution, batchsize:int, mag_split = 1, aug_degree = 5, d = None):
         self.distrib = distrib
         self.K = distrib.num_loc 
+        self.batchsize = batchsize
 
         assert aug_degree <= self.K - distrib.pattern_len, f"Aug Degree [{aug_degree}] should <= K [{self.K}] - pattern_len [{distrib.pattern_len}]"
         
@@ -155,14 +156,49 @@ class Generator:
             for j, a in enumerate(token):
                 x[i, j, :] = self.symbol_embedding[:, a] * self.mags[a]
         return x
-    
-    def sample(self, n):
-        tokens = self.distrib.sample(n)
-        ground_tokens1 = self._ground_tokens(tokens)
-        # ground_tokens2 = self._ground_tokens(tokens)
-        ground_tokens2 = self._change_wildcard_tokens(tokens, ground_tokens1)
 
-        x1 = self._symbol2embedding(ground_tokens1)
-        x2 = self._symbol2embedding(ground_tokens2)
-                
-        return x1, x2, ground_tokens1, ground_tokens2, tokens
+    def set_batchsize(self, batchsize):
+        self.batchsize = batchsize
+    
+    def __iter__(self):
+        while True:
+            tokens = self.distrib.sample(self.batchsize)
+            ground_tokens1 = self._ground_tokens(tokens)
+            # ground_tokens2 = self._ground_tokens(tokens)
+            ground_tokens2 = self._change_wildcard_tokens(tokens, ground_tokens1)
+
+            x1 = self._symbol2embedding(ground_tokens1)
+            x2 = self._symbol2embedding(ground_tokens2)
+
+            yield x1, x2, dict(ground_tokens1=ground_tokens1, ground_tokens2=ground_tokens2, tokens=tokens)
+
+from torchvision import transforms, datasets
+from torch.utils.data.dataloader import DataLoader
+
+def get_mnist_transform():
+    return transforms.Compose(
+        [
+            transforms.RandomResizedCrop((28,28), scale=(0.9, 1.0), ratio=(0.9, 1.1)),
+            transforms.ToTensor(),
+        ])
+
+class MultiViewDataInjector(object):
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def __call__(self, sample):
+        output = [transform(sample) for transform in self.transforms]
+        return output
+    
+
+# MNIST generator
+class MNISTGenerator:
+    def __init__(self, args):
+        transform = get_mnist_transform()
+        self.train_dataset = datasets.MNIST(args.dataset_path, train=True, download=True, transform=MultiViewDataInjector([transform, transform]))
+        self.train_loader = DataLoader(self.train_dataset, batch_size=args.batchsize, num_workers=4, drop_last=True, shuffle=False)
+    
+    def __iter__(self):
+        for (x1s, x2s), labels in self.train_loader:
+            yield x1s, x2s, dict(labels=labels) 
+         

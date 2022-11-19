@@ -49,6 +49,8 @@ generator:
   # otherwise we will create non-orthogonal embedding vectors.  
   d: null
 
+dataset_path: "/checkpoint/yuandong/datasets"
+
 l2_type: regular
 loss_type: infoNCE
 aug: true
