@@ -175,12 +175,13 @@ class Generator:
 from torchvision import transforms, datasets
 from torch.utils.data.dataloader import DataLoader
 
-def get_mnist_transform():
-    return transforms.Compose(
-        [
-            # transforms.RandomResizedCrop((28,28), scale=(0.9, 1.0), ratio=(0.9, 1.1)),
-            transforms.ToTensor(),
-        ])
+def get_mnist_transform(args):
+    trans = []
+    if args.dataset_use_aug:
+        strength = args.dataset_use_aug_strength
+        trans.append(transforms.RandomResizedCrop((28,28), scale=(1.0-strength, 1.0), ratio=(1.0-strength, 1.0+strength)))
+    trans.append(transforms.ToTensor())
+    return transforms.Compose(trans)
 
 class MultiViewDataInjector(object):
     def __init__(self, transforms):
@@ -194,9 +195,9 @@ class MultiViewDataInjector(object):
 # MNIST generator
 class MNISTGenerator:
     def __init__(self, args):
-        transform = get_mnist_transform()
+        transform = get_mnist_transform(args)
         self.train_dataset = datasets.MNIST(args.dataset_path, train=True, download=True, transform=MultiViewDataInjector([transform, transform]))
-        self.train_loader = DataLoader(self.train_dataset, batch_size=args.batchsize, num_workers=1, drop_last=True, shuffle=True)
+        self.train_loader = DataLoader(self.train_dataset, batch_size=args.batchsize, num_workers=0, drop_last=True, shuffle=True)
         self.K_side = 2
         self.d_side = 14
         self.d = self.d_side * self.d_side
