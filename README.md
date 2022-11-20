@@ -1,7 +1,19 @@
-This repo contains the code of the following 4 papers:
+This repo contains the code of the following 6 papers:
 
 ## Analysis of Self-supervised learning (`./ssl`) 
-**Understanding Understanding self-supervised Learning Dynamics without Contrastive Pairs**
+**Understanding the Role of Nonlinearity in Training Dynamics of Contrastive Learning**
+
+Yuandong Tian
+
+[arXiv](https://arxiv.org/abs/2206.01342)
+
+**Understanding Deep Contrastive Learning via Coordinate-wise Optimization**
+
+Yuandong Tian
+
+[NeurIPS'22](https://arxiv.org/abs/2201.12680) Oral
+
+**Understanding self-supervised Learning Dynamics without Contrastive Pairs**
 
 Yuandong Tian, Xinlei Chen, Surya Ganguli
 
