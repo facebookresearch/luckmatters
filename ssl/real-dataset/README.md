@@ -142,13 +142,13 @@ Yuandong Tian, Xinlei Chen, Surya Ganguli
 
 [ICML'21](https://arxiv.org/abs/2102.06810) *Outstanding paper honorable mention* 
 
-[3] Understanding Deep Contrastive Learning via Coordinate-wise Optimization
+[3] **Understanding Deep Contrastive Learning via Coordinate-wise Optimization**
 
 Yuandong Tian
 
-[NeurIPS'22](https://arxiv.org/abs/2201.12680)
+[NeurIPS'22](https://arxiv.org/abs/2201.12680) Oral
 
-[4] Understanding the Role of Nonlinearity in Training Dynamics of Contrastive Learning
+[4] **Understanding the Role of Nonlinearity in Training Dynamics of Contrastive Learning**
 
 Yuandong Tian
 
