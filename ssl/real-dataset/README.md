@@ -5,6 +5,9 @@ You will need to install [hydra](https://github.com/facebookresearch/hydra) for 
 
 Note that to avoid downloading dataset every time you run the program, you can change `dataset_path` in `config/byol_config.yaml` (which is actually shared by both BYOL and SimCLR methods) to an absolute path.
 
+# Prerequisite
+
+Please install `common_utils` package in https://github.com/yuandong-tian/tools2 before running the code. 
 
 # Sample Usage 
 
