@@ -35,6 +35,7 @@ class Model(nn.Module):
         content_input = self.embedding(x_input)
 
         # Do self-attention (bs, L, L)
+        # No Wk and Wq for now
         attentions = torch.bmm(content_input, content_input.permute(0, 2, 1))
 
         # [L, d]
