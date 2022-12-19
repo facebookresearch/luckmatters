@@ -8,7 +8,12 @@ d: 5
 # batchsize
 batchsize: 128
 
+enumerate_all_classes: true
+p0: 0.7
+p1: 0.9
+
 opt:
+  method: "adam"
   lr: 0.1
   momentum: 0.9
   wd: 5e-4
