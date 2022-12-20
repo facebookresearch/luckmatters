@@ -12,6 +12,10 @@ enumerate_all_classes: true
 p0: 0.7
 p1: 0.9
 
+use_WkWq: false 
+use_ffn: true
+use_simple_sum: false
+
 opt:
   method: "adam"
   lr: 0.1

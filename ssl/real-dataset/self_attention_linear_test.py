@@ -26,22 +26,30 @@ class LinearModel(nn.Module):
     
 
 class Model(nn.Module):
-    def __init__(self, M, L, d, num_class):
+    def __init__(self, M, L, d, num_class, args):
         super(Model, self).__init__()
         self.M = M
         self.embed = nn.Embedding(M, d) # max_norm=1)
 
-        self.use_WkWq = False
+        self.use_WkWq = args.use_WkWq
+        self.use_ffn = args.use_ffn
+        self.use_simple_sum = args.use_simple_sum
 
         if self.use_WkWq:
             self.Wk = nn.Linear(d, 2*d, bias=False)
             self.Wq = nn.Linear(d, 2*d, bias=False)
 
-        self.V = nn.Embedding(M, d)
-        self.w1 = nn.Linear(d, d)
-        self.w2 = nn.Linear(d, num_class)
-        self.w3 = nn.Linear(num_class * L, num_class)
-        self.relu = nn.ReLU()
+        if self.use_ffn:
+            self.V = nn.Embedding(M, d)
+            self.w1 = nn.Linear(d, d)
+            self.w2 = nn.Linear(d, num_class)
+            self.relu = nn.ReLU()
+        else:
+            self.V = nn.Embedding(M, num_class)
+
+        if not self.use_simple_sum:
+            self.w3 = nn.Linear(num_class * L, num_class)
+
         self.d = d
         self.L = L
         
@@ -76,9 +84,14 @@ class Model(nn.Module):
         # V_sel size = [bs, L, V_dim]
         # output size = [bs, L, V_dim]
         output = torch.bmm(attentions, V_sel)
-        output = self.w2(self.relu(self.w1(output)))
-        # return output.sum(dim=1)
-        return self.w3(output.view(x.size(0), -1))
+
+        if self.use_ffn:
+            output = self.w2(self.relu(self.w1(output)))
+
+        if self.use_simple_sum:
+            return output.sum(dim=1)
+        else:
+            return self.w3(output.view(x.size(0), -1))
 
     def normalize(self):
         # Normalize the embedding (should be realized by layernorm)
@@ -232,7 +245,7 @@ def main(args):
     common_utils.set_all_seeds(args.seed)
 
     dataset = Dataset(args.L, args)
-    model = Model(dataset.M, dataset.L, args.d, dataset.num_class)
+    model = Model(dataset.M, dataset.L, args.d, dataset.num_class, args)
     model_linear = LinearModel(args.L, dataset.num_class)
 
     if args.opt.method == "adam":
