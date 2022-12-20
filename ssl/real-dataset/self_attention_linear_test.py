@@ -35,6 +35,9 @@ class Model(nn.Module):
         self.use_ffn = args.use_ffn
         self.use_simple_sum = args.use_simple_sum
 
+        self.normalize_embed_shift = args.normalize_embed_shift
+        self.normalize_embed_scale = args.normalize_embed_scale
+
         if self.use_WkWq:
             self.Wk = nn.Linear(d, 2*d, bias=False)
             self.Wq = nn.Linear(d, 2*d, bias=False)
@@ -96,8 +99,10 @@ class Model(nn.Module):
     def normalize(self):
         # Normalize the embedding (should be realized by layernorm)
         with torch.no_grad():
-            self.embed.weight[:] = self.embed.weight - self.embed.weight.mean(dim=1, keepdim=True) 
-            # self.embed.weight[:] = self.embed.weight / self.embed.weight.norm(dim=1, keepdim=True) * 5 
+            if self.normalize_embed_shift:
+                self.embed.weight[:] = self.embed.weight - self.embed.weight.mean(dim=1, keepdim=True) 
+            if self.normalize_embed_scale:
+                self.embed.weight[:] = self.embed.weight / self.embed.weight.norm(dim=1, keepdim=True) 
             # self.embed.weight[:] = self.embed.weight / self.embed.weight.norm() * 5 
 
 class HierGenerator:
@@ -283,7 +288,7 @@ def main(args):
         loss_linear.backward()
         optimizer_linear.step()
 
-        # model.normalize()
+        model.normalize()
 
     # log.info("Embedding K:")
     # log.info(model.K.weight)
