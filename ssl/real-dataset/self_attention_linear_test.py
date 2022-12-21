@@ -23,7 +23,30 @@ class LinearModel(nn.Module):
         # x is size (bs, L) of type LongTensor, L is the length of the seq
         xx = (x != self.L).float()
         return self.model(xx).squeeze()
-    
+
+# Since Wv still works, let's try multi-layer 
+# class SABlock(nn.Module):
+#     def __init__(self, M, d, args):
+#         self.use_WkWq = args.use_WkWq
+#         self.use_ffn = args.use_ffn
+#         self.use_residue = args.use_residue
+
+#         if self.use_WkWq:
+#             self.Wk = nn.Linear(d, 2*d, bias=False)
+#             self.Wq = nn.Linear(d, 2*d, bias=False)
+
+#         if self.use_ffn:
+#             self.V = nn.Embedding(M, d)
+#             self.w1 = nn.Linear(d, d)
+#             self.w2 = nn.Linear(d, d)
+#             self.relu = nn.ReLU()
+#         else:
+#             self.V = nn.Embedding(M, d)
+
+#         self.d = d
+
+#     def forward(self, x):
+        
 
 class Model(nn.Module):
     def __init__(self, M, L, d, num_class, args):
@@ -42,13 +65,13 @@ class Model(nn.Module):
             self.Wk = nn.Linear(d, 2*d, bias=False)
             self.Wq = nn.Linear(d, 2*d, bias=False)
 
+        self.Wv = nn.Linear(d, d)
+        # self.V = nn.Embedding(M, d)
+
         if self.use_ffn:
-            self.V = nn.Embedding(M, d)
             self.w1 = nn.Linear(d, d)
             self.w2 = nn.Linear(d, d)
             self.relu = nn.ReLU()
-        else:
-            self.V = nn.Embedding(M, d)
 
         self.w3 = nn.Linear(d * L, num_class)
 
@@ -70,7 +93,8 @@ class Model(nn.Module):
             K_sel = embed
 
         # of size [bs, L, V_dim]
-        V_sel = self.V(x_input)
+        # V_sel = self.V(x_input)
+        V_sel = self.Wv(embed)
 
         # Do self-attention (bs, L, L)
         # No Wk and Wq for now
