@@ -122,6 +122,73 @@ class Model(nn.Module):
                 self.embed.weight[:] = self.embed.weight / self.embed.weight.norm(dim=1, keepdim=True) 
             # self.embed.weight[:] = self.embed.weight / self.embed.weight.norm() * 5 
 
+class TreeNode:
+    def __init__(self, probs, subtrees):
+        self.probs = probs
+        self.subtrees = subtrees
+
+    def traverse(self, sampling=True):
+        curr_nodes = [(1.0, self)]
+        result = []
+        while len(curr_nodes) > 0:
+            td_prob, node = curr_nodes[0]
+            curr_nodes = curr_nodes[1:]
+
+            for prob, subnode in zip(node.probs, node.subtrees):
+                # If we just do sampling, then we will omit the subtree that failed the prob check.
+                if sampling and random.random() > prob:
+                    continue
+
+                item = (td_prob * prob, subnode)
+                if isinstance(subnode, TreeNode):
+                    # the subnode is valid and we put it to the queue
+                    curr_nodes.append(item)
+                else:
+                    # It is a leave node. and we put it to return set
+                    result.append(item)
+        return result
+
+    def multiply(self, prob_ratio):
+        new_probs = [ p * prob_ratio for p in self.probs ]
+        return TreeNode(new_probs, self.subtrees)
+
+    def collapse(self, change=None):
+        # Collapse the node into all independent shallow tree
+        new_probs = []
+        new_subtrees = []
+
+        change = [True] * len(self.probs) if change is None else change 
+
+        for prob, subnode, c in zip(self.probs, self.subtrees, change):
+            if not c or not isinstance(subnode, TreeNode):
+                # leaf, don't need to do anything. 
+                new_probs.append(prob)
+                new_subtrees.append(subnode)
+            else:
+                subnode = subnode.collapse().multiply(prob)
+                # Multiple the prob back
+                new_probs.extend(subnode.probs)
+                new_subtrees.extend(subnode.subtrees)
+
+        return TreeNode(new_probs, new_subtrees)
+
+    def desc(self, indent=0):
+        res = ""
+        prefix = " " * indent
+        for prob, subnode in zip(self.probs, self.subtrees):
+            res += prefix + str(prob) + ": "
+            if not isinstance(subnode, TreeNode):
+                res += str(subnode) + "\n"
+            else:
+                res += "\n" 
+                res += subnode.desc(indent = indent + 2)
+
+        return res
+
+    def __repr__(self) -> str:
+        return self.desc()
+        
+
 class HierGenerator:
     def __init__(self, tree, num_tokens_except_bg, bg_token):
         self.tree = tree
@@ -131,41 +198,21 @@ class HierGenerator:
     def compute_margin_prob(self):
         # Generate according to the tree
         probs = torch.zeros(self.num_tokens_except_bg)
-        curr_nodes = [self.tree]
-        while len(curr_nodes) > 0:
-            subnodes = curr_nodes[0]
-            curr_nodes = curr_nodes[1:]
+        results = self.tree.traverse(sampling=False)
+        for p, token in results:
+            probs[token] += p
 
-            for prob, subnode in subnodes:
-                if isinstance(subnode, int):
-                    # It is a leave node and we put it to the set
-                    probs[subnode] += prob
-                else:
-                    # the subnode is valid and we put it to the queue
-                    curr_nodes.append([(pp*prob, rr) for pp, rr in subnode])
         return probs
 
     def sample(self):
         # Generate according to the tree
         x = torch.LongTensor(self.num_tokens_except_bg).fill_(self.bg_token)
-        curr_nodes = [self.tree]
-        while len(curr_nodes) > 0:
-            subnodes = curr_nodes[0]
-            curr_nodes = curr_nodes[1:]
 
-            for prob, subnode in subnodes:
-                if random.random() < prob:
-                    if isinstance(subnode, int):
-                        # It is a leave node and we put it to the set
-                        x[subnode] = subnode
-                    else:
-                        # the subnode is valid and we put it to the queue
-                        curr_nodes.append(subnode)
+        results = self.tree.traverse(sampling=True)
+        for p, token in results:
+            x[token] = token
 
-        # import pdb 
-        # pdb.set_trace()
         return x
-                     
 
 class IndepGenerator:
     def __init__(self, p, bg_token):
@@ -204,11 +251,12 @@ class Dataset:
         # self.probs = [prob_class1, prob_class2, prob_class3, prob_neg]
         # self.num_class = len(self.probs)
 
-        tree = [
-            [args.p0, [(args.p1, 0), (args.p1, 1), (args.p1, 2)]], 
-            [args.p0, [(args.p1, 3), (args.p1, 4), (args.p1, 5)]], 
-            [args.p0, [(args.p1, 6), (args.p1, 7), (args.p1, 8)]], 
-        ]
+        subtrees = []
+        subtrees.append(TreeNode([args.p1] * 3, [0, 1, 2]))
+        subtrees.append(TreeNode([args.p1] * 3, [3, 4, 5]))
+        subtrees.append(TreeNode([args.p1] * 3, [6, 7, 8]))
+        tree = TreeNode([args.p0] * 3, subtrees)
+        num_children = 3
 
         bg_token = self.M - 1
 
@@ -216,36 +264,32 @@ class Dataset:
         probs = hier_gen.compute_margin_prob()
         log.info(f"Marginal prob: {probs}")
 
-        self.gens = []
+        all_flags = []
 
         if args.enumerate_all_classes:
             # Create 2^n classes.
-            for i in range(2**len(tree)):
+            for i in range(2**num_children):
                 binary_code = f"{i:b}"
-                if len(binary_code) < len(tree):
-                    binary_code = ('0' * (len(tree) - len(binary_code))) + binary_code
-                dup_tree = []
-                for j in range(len(tree)):
-                    tj = tree[j]
-                    if binary_code[j] == '0':
-                        dup_tree.append(tj)
-                    else:
-                        dup_tree.extend([(p * tj[0], subnode) for p, subnode in tj[1]])
-
-                print(dup_tree)
-                self.gens.append(HierGenerator(dup_tree, self.M - 1, bg_token))
+                if len(binary_code) < num_children:
+                    binary_code = ('0' * (num_children - len(binary_code))) + binary_code
+                all_flags.append([ b == '0' for b in binary_code ])
 
         else:
-            # do a reduction
-            self.gens = [hier_gen]
-            for t in range(len(tree)):
-                # reduce t-th line
-                dup_tree = tree[:t] + tree[t+1:]
-                dup_tree.extend([(p * tree[t][0], subnode) for p, subnode in tree[t][1] ]) 
-                print(dup_tree)
-                self.gens.append(HierGenerator(dup_tree, self.M - 1, bg_token))
-                
-            self.gens.append(IndepGenerator(probs, bg_token))
+            # No change
+            all_flags.append([False] * num_children)
+            # All independent
+            all_flags.append([True] * num_children)
+
+            for t in range(num_children):
+                flags = [False] * num_children
+                flags[t] = True
+                all_flags.append(flags)
+
+        self.gens = []
+        for flags in all_flags:
+            dup_tree = tree.collapse(change=flags)
+            print(dup_tree)
+            self.gens.append(HierGenerator(dup_tree, self.M - 1, bg_token))
 
         self.num_class = len(self.gens)
   
