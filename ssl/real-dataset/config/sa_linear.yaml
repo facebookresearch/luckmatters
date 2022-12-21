@@ -14,7 +14,7 @@ p1: 0.9
 
 use_WkWq: false 
 use_ffn: true
-use_simple_sum: false
+use_residue: true
 
 normalize_embed_shift: false
 normalize_embed_scale: false

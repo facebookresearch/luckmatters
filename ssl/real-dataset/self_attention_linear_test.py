@@ -33,7 +33,7 @@ class Model(nn.Module):
 
         self.use_WkWq = args.use_WkWq
         self.use_ffn = args.use_ffn
-        self.use_simple_sum = args.use_simple_sum
+        self.use_residue = args.use_residue
 
         self.normalize_embed_shift = args.normalize_embed_shift
         self.normalize_embed_scale = args.normalize_embed_scale
@@ -45,13 +45,12 @@ class Model(nn.Module):
         if self.use_ffn:
             self.V = nn.Embedding(M, d)
             self.w1 = nn.Linear(d, d)
-            self.w2 = nn.Linear(d, num_class)
+            self.w2 = nn.Linear(d, d)
             self.relu = nn.ReLU()
         else:
-            self.V = nn.Embedding(M, num_class)
+            self.V = nn.Embedding(M, d)
 
-        if not self.use_simple_sum:
-            self.w3 = nn.Linear(num_class * L, num_class)
+        self.w3 = nn.Linear(d * L, num_class)
 
         self.d = d
         self.L = L
@@ -91,10 +90,10 @@ class Model(nn.Module):
         if self.use_ffn:
             output = self.w2(self.relu(self.w1(output)))
 
-        if self.use_simple_sum:
-            return output.sum(dim=1)
-        else:
-            return self.w3(output.view(x.size(0), -1))
+        if self.use_residue:
+            output = output + embed
+
+        return self.w3(output.view(x.size(0), -1))
 
     def normalize(self):
         # Normalize the embedding (should be realized by layernorm)
