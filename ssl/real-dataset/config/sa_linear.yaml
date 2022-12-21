@@ -8,6 +8,8 @@ d: 5
 # batchsize
 batchsize: 128
 
+nlayer: 1
+
 enumerate_all_classes: true
 p0: 0.7
 p1: 0.9

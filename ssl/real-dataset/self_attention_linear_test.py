@@ -25,66 +25,28 @@ class LinearModel(nn.Module):
         return self.model(xx).squeeze()
 
 # Since Wv still works, let's try multi-layer 
-# class SABlock(nn.Module):
-#     def __init__(self, M, d, args):
-#         self.use_WkWq = args.use_WkWq
-#         self.use_ffn = args.use_ffn
-#         self.use_residue = args.use_residue
-
-#         if self.use_WkWq:
-#             self.Wk = nn.Linear(d, 2*d, bias=False)
-#             self.Wq = nn.Linear(d, 2*d, bias=False)
-
-#         if self.use_ffn:
-#             self.V = nn.Embedding(M, d)
-#             self.w1 = nn.Linear(d, d)
-#             self.w2 = nn.Linear(d, d)
-#             self.relu = nn.ReLU()
-#         else:
-#             self.V = nn.Embedding(M, d)
-
-#         self.d = d
-
-#     def forward(self, x):
-        
-
-class Model(nn.Module):
-    def __init__(self, M, L, d, num_class, args):
-        super(Model, self).__init__()
-        self.M = M
-        self.embed = nn.Embedding(M, d) # max_norm=1)
+class SABlock(nn.Module):
+    def __init__(self, d, args):
+        super(SABlock, self).__init__()
 
         self.use_WkWq = args.use_WkWq
         self.use_ffn = args.use_ffn
         self.use_residue = args.use_residue
-
-        self.normalize_embed_shift = args.normalize_embed_shift
-        self.normalize_embed_scale = args.normalize_embed_scale
 
         if self.use_WkWq:
             self.Wk = nn.Linear(d, 2*d, bias=False)
             self.Wq = nn.Linear(d, 2*d, bias=False)
 
         self.Wv = nn.Linear(d, d)
-        # self.V = nn.Embedding(M, d)
 
         if self.use_ffn:
             self.w1 = nn.Linear(d, d)
             self.w2 = nn.Linear(d, d)
             self.relu = nn.ReLU()
 
-        self.w3 = nn.Linear(d * L, num_class)
-
         self.d = d
-        self.L = L
-        
-    def forward(self, x):
-        # x is size (bs, L) of type LongTensor, L is the length of the seq
-        x_input = x.clone()
 
-        # of size [bs, L, d]
-        embed = self.embed(x_input) 
-
+    def forward(self, embed):
         if self.use_WkWq:
             Q_sel = self.Wq(embed)
             K_sel = self.Wk(embed)
@@ -116,6 +78,38 @@ class Model(nn.Module):
 
         if self.use_residue:
             output = output + embed
+
+        return output
+        
+
+class Model(nn.Module):
+    def __init__(self, M, L, d, num_class, args):
+        super(Model, self).__init__()
+        self.M = M
+        self.embed = nn.Embedding(M, d) # max_norm=1)
+
+        self.normalize_embed_shift = args.normalize_embed_shift
+        self.normalize_embed_scale = args.normalize_embed_scale
+
+        self.blocks = nn.ModuleList(
+            [ SABlock(d, args) for l in range(args.nlayer) ]
+        )
+
+        self.w3 = nn.Linear(d * L, num_class)
+
+        self.d = d
+        self.L = L
+        
+    def forward(self, x):
+        # x is size (bs, L) of type LongTensor, L is the length of the seq
+        x_input = x.clone()
+
+        # of size [bs, L, d]
+        output = self.embed(x_input) 
+
+        # of size [bs, L, d]
+        for b in self.blocks:
+            output = b(output)
 
         return self.w3(output.view(x.size(0), -1))
 
