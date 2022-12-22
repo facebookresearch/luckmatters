@@ -230,39 +230,14 @@ class IndepGenerator:
         return x
 
 class Dataset:
-    def __init__(self, L, args):
-        # M = number of tokens
-        # L = length of the seq
-        self.L = L
-        self.M = L + 1
-
-        # prob_class1 = torch.ones(self.L) * 0.55
-        # prob_class1[0] = prob_class1[1] = 0.95
-
-        # prob_class2 = torch.ones(self.L) * 0.55
-        # prob_class2[2] = prob_class2[3] = 0.95
-
-        # prob_class3 = torch.ones(self.L) * 0.55
-        # prob_class3[4] = prob_class3[5] = 0.95
-
-        # prob_neg = torch.ones(self.L) * 0.5
-
-        # # Create several classes
-        # self.probs = [prob_class1, prob_class2, prob_class3, prob_neg]
-        # self.num_class = len(self.probs)
-
+    @staticmethod
+    def _gen_models(args):
         subtrees = []
         subtrees.append(TreeNode([args.p1] * 3, [0, 1, 2]))
         subtrees.append(TreeNode([args.p1] * 3, [3, 4, 5]))
         subtrees.append(TreeNode([args.p1] * 3, [6, 7, 8]))
         tree = TreeNode([args.p0] * 3, subtrees)
         num_children = 3
-
-        bg_token = self.M - 1
-
-        hier_gen = HierGenerator(tree, self.M - 1, bg_token)
-        probs = hier_gen.compute_margin_prob()
-        log.info(f"Marginal prob: {probs}")
 
         all_flags = []
 
@@ -285,13 +260,86 @@ class Dataset:
                 flags[t] = True
                 all_flags.append(flags)
 
+        return [tree], all_flags, 9
+
+    @staticmethod
+    def _gen_models2(args):
+        subtrees = []
+
+        layer1 = [
+            TreeNode([args.p1] * 2, [0, 1]), 
+            TreeNode([args.p1] * 2, [2, 3]),
+            TreeNode([args.p1] * 2, [4, 5]), 
+            TreeNode([args.p1] * 2, [6, 7]),
+            TreeNode([args.p1] * 2, [8, 9]),
+            TreeNode([args.p1] * 2, [10, 11])
+        ] 
+
+        layer2 = [
+            TreeNode([args.p2] * 2, [layer1[0], layer1[1]]),
+            # TreeNode([args.p2] * 2, [layer1[1], layer1[2]]),
+            TreeNode([args.p2] * 2, [layer1[2], layer1[3]]),
+            # TreeNode([args.p2] * 2, [layer1[3], layer1[4]]),
+            TreeNode([args.p2] * 2, [layer1[4], layer1[5]]),
+        ]
+
+        # Simply three classes
+        layer3 = [
+            TreeNode([args.p3] * 2, [layer2[0], layer2[1]]),
+            TreeNode([args.p3] * 2, [layer2[1], layer2[2]]),
+            TreeNode([args.p3] * 2, [layer2[2], layer2[0]]),
+        ]
+
+        all_flags = [
+            [False, True], 
+            [True, False], 
+            [False, False],
+        ]
+
+        return layer3, all_flags, 12
+
+    def __init__(self, args):
+        # prob_class1 = torch.ones(self.L) * 0.55
+        # prob_class1[0] = prob_class1[1] = 0.95
+
+        # prob_class2 = torch.ones(self.L) * 0.55
+        # prob_class2[2] = prob_class2[3] = 0.95
+
+        # prob_class3 = torch.ones(self.L) * 0.55
+        # prob_class3[4] = prob_class3[5] = 0.95
+
+        # prob_neg = torch.ones(self.L) * 0.5
+
+        # # Create several classes
+        # self.probs = [prob_class1, prob_class2, prob_class3, prob_neg]
+        # self.num_class = len(self.probs)
+
+        # hier_gen = HierGenerator(tree, self.M - 1, bg_token)
+        # probs = hier_gen.compute_margin_prob()
+        # log.info(f"Marginal prob: {probs}")
+
+        trees, all_flags, self.L = self._gen_models2(args)
+        # M = number of tokens
+        # L = length of the seq
+        # Currently L = all foreground tokens, and M is the background token 
+        self.M = self.L + 1
+        bg_token = self.M - 1
+
         self.gens = []
-        for flags in all_flags:
-            dup_tree = tree.collapse(change=flags)
-            print(dup_tree)
-            self.gens.append(HierGenerator(dup_tree, self.M - 1, bg_token))
+        if all_flags is not None: 
+            for tree in trees:
+                for flags in all_flags:
+                    dup_tree = tree.collapse(change=flags)
+                    print(dup_tree)
+                    self.gens.append(HierGenerator(dup_tree, self.M - 1, bg_token))
+        else:
+            # Just use trees
+            for tree in trees:
+                print(tree)
+                self.gens.append(HierGenerator(tree, self.M - 1, bg_token))
 
         self.num_class = len(self.gens)
+        log.info(f"#classes: {self.num_class}")
   
 
     def generate(self, batchsize):
@@ -310,9 +358,9 @@ def main(args):
     log.info(common_utils.print_info(args))
     common_utils.set_all_seeds(args.seed)
 
-    dataset = Dataset(args.L, args)
+    dataset = Dataset(args)
     model = Model(dataset.M, dataset.L, args.d, dataset.num_class, args)
-    model_linear = LinearModel(args.L, dataset.num_class)
+    model_linear = LinearModel(dataset.L, dataset.num_class)
 
     if args.opt.method == "adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=args.opt.lr, weight_decay=args.opt.wd)

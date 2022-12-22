@@ -1,8 +1,6 @@
 niter: 1000
 seed: 1
 
-# Length of seq
-L: 10
 # dimension of embedding
 d: 5
 # batchsize
@@ -13,6 +11,8 @@ nlayer: 1
 enumerate_all_classes: true
 p0: 0.7
 p1: 0.9
+p2: 0.7
+p3: 0.5
 
 use_WkWq: false 
 use_ffn: true
