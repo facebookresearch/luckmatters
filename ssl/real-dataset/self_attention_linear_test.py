@@ -123,9 +123,23 @@ class Model(nn.Module):
             # self.embed.weight[:] = self.embed.weight / self.embed.weight.norm() * 5 
 
 class TreeNode:
-    def __init__(self, probs, subtrees):
+    _global_table = {}
+
+    def __init__(self, probs, subtrees, name=None):
         self.probs = probs
         self.subtrees = subtrees
+
+        if name is not None:
+            assert name not in TreeNode._global_table, \
+                f"TreeNode {name} must be unique! Existing node: {TreeNode._global_table[name]}"
+            TreeNode._global_table[name] = self
+
+    @staticmethod
+    def g(name, default_none=False):
+        if not default_none:
+            assert name in TreeNode._global_table, f"TreeNode {name} must exist!"
+            
+        return TreeNode._global_table.get(name, None)
 
     def traverse(self, sampling=True):
         curr_nodes = [(1.0, self)]
@@ -171,6 +185,22 @@ class TreeNode:
                 new_subtrees.extend(subnode.subtrees)
 
         return TreeNode(new_probs, new_subtrees)
+
+    def random_collapse(self, collapse_prob=0.5):
+        if random.random() < collapse_prob:
+            return self.collapse()
+        else:
+            new_subtrees = []
+            for prob, subnode in zip(self.probs, self.subtrees):
+                if not isinstance(subnode, TreeNode):
+                    # leaf, don't need to do anything. 
+                    new_subtrees.append(subnode)
+                else:
+                    # collapse the child
+                    subnode = subnode.random_collapse(collapse_prob=collapse_prob)
+                    new_subtrees.append(subnode)
+
+        return TreeNode(self.probs, new_subtrees)
 
     def desc(self, indent=0):
         res = ""
@@ -260,43 +290,25 @@ class Dataset:
                 flags[t] = True
                 all_flags.append(flags)
 
-        return [tree], all_flags, 9
+        trees = [ tree.collapse(change=flags) for flags in all_flags ]
+        return trees, 9
 
     @staticmethod
     def _gen_models2(args):
         subtrees = []
 
-        layer1 = [
-            TreeNode([args.p1] * 2, [0, 1]), 
-            TreeNode([args.p1] * 2, [2, 3]),
-            TreeNode([args.p1] * 2, [4, 5]), 
-            TreeNode([args.p1] * 2, [6, 7]),
-            TreeNode([args.p1] * 2, [8, 9]),
-            TreeNode([args.p1] * 2, [10, 11])
-        ] 
+        # First layer
+        layer1 = [ TreeNode([args.p1] * 2, [2*i, 2*i + 1], name=f"l1-{i}") for i in range(6) ]
 
-        layer2 = [
-            TreeNode([args.p2] * 2, [layer1[0], layer1[1]]),
-            # TreeNode([args.p2] * 2, [layer1[1], layer1[2]]),
-            TreeNode([args.p2] * 2, [layer1[2], layer1[3]]),
-            # TreeNode([args.p2] * 2, [layer1[3], layer1[4]]),
-            TreeNode([args.p2] * 2, [layer1[4], layer1[5]]),
-        ]
+        # second layer
+        layer2 = [ TreeNode([args.p2] * 2, [TreeNode.g(f"l1-{i}"), TreeNode.g(f"l1-{i+1}")], name=f"l2-{i}") for i in range(5) ] 
 
         # Simply three classes
-        layer3 = [
-            TreeNode([args.p3] * 2, [layer2[0], layer2[1]]),
-            TreeNode([args.p3] * 2, [layer2[1], layer2[2]]),
-            TreeNode([args.p3] * 2, [layer2[2], layer2[0]]),
-        ]
+        layer3 = [ TreeNode([args.p3] * 2, [TreeNode.g(f"l2-{i}"), TreeNode.g(f"l2-{i+1}")], name=f"l3-{i}") for i in range(4) ] 
 
-        all_flags = [
-            [False, True], 
-            [True, False], 
-            [False, False],
-        ]
-
-        return layer3, all_flags, 12
+        trees = [ tree.random_collapse(collapse_prob=0.3) for tree in layer3 for _ in range(3) ]
+        return trees, 12
+        
 
     def __init__(self, args):
         # prob_class1 = torch.ones(self.L) * 0.55
@@ -318,7 +330,7 @@ class Dataset:
         # probs = hier_gen.compute_margin_prob()
         # log.info(f"Marginal prob: {probs}")
 
-        trees, all_flags, self.L = self._gen_models2(args)
+        trees, self.L = self._gen_models2(args)
         # M = number of tokens
         # L = length of the seq
         # Currently L = all foreground tokens, and M is the background token 
@@ -326,17 +338,9 @@ class Dataset:
         bg_token = self.M - 1
 
         self.gens = []
-        if all_flags is not None: 
-            for tree in trees:
-                for flags in all_flags:
-                    dup_tree = tree.collapse(change=flags)
-                    print(dup_tree)
-                    self.gens.append(HierGenerator(dup_tree, self.M - 1, bg_token))
-        else:
-            # Just use trees
-            for tree in trees:
-                print(tree)
-                self.gens.append(HierGenerator(tree, self.M - 1, bg_token))
+        for tree in trees:
+            print(tree)
+            self.gens.append(HierGenerator(tree, self.M - 1, bg_token))
 
         self.num_class = len(self.gens)
         log.info(f"#classes: {self.num_class}")
