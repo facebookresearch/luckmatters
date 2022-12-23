@@ -162,16 +162,66 @@ class TreeNode:
                     result.append(item)
         return result
 
+    def random_split(self, desired_depth=1):
+        if desired_depth <= 0:
+            return self
+
+        # Split a random node. 
+        candidate_subnodes = [ 
+            (prob, subnode, i) for i, (prob, subnode) in enumerate(zip(self.probs, self.subtrees)) \
+                if isinstance(subnode, TreeNode) and len(subnode.probs) > 1 
+        ]
+
+        # Skip if there is no node that satisfies the requirement 
+        # (e.g., no TreeNode in the children list, or all TreeNodes contain only 1 element) 
+        if len(candidate_subnodes) == 0:
+            return self
+
+        # Pick one 
+        picked_prob, picked_subnode, picked_idx = random.choice(candidate_subnodes) 
+
+        if desired_depth == 1:
+            # Time to split
+            indices = list(range(len(picked_subnode.probs)))
+            random.shuffle(indices)
+
+            # Do an even split
+            half = len(indices) // 2
+
+            left_probs = [picked_subnode.probs[i] for i in indices[:half]] 
+            right_probs = [picked_subnode.probs[i] for i in indices[half:]] 
+
+            left_subtrees = [picked_subnode.subtrees[i] for i in indices[:half]] 
+            right_subtrees = [picked_subnode.subtrees[i] for i in indices[half:]] 
+
+            left_subnode = TreeNode(left_probs, left_subtrees)
+            right_subnode = TreeNode(right_probs, right_subtrees)
+
+            new_probs = self.probs[:picked_idx] + [picked_prob] * 2 + self.probs[picked_idx+1:]
+            new_subtrees = self.subtrees[:picked_idx] + [left_subnode, right_subnode] + self.subtrees[picked_idx+1:]
+            return TreeNode(new_probs, new_subtrees) 
+            
+        else:
+            # Do not split, but send the message to the specified child
+            self.subtrees[picked_idx] = picked_subnode.random_split(desired_depth=desired_depth-1)
+            return self
+
+
     def multiply(self, prob_ratio):
         new_probs = [ p * prob_ratio for p in self.probs ]
         return TreeNode(new_probs, self.subtrees)
 
-    def collapse(self, change=None):
-        # Collapse the node into all independent shallow tree
+
+    def flattern(self, depth=None, change=None):
+        if depth is not None and depth <= 0:
+            return self 
+
+        # flattern the node into all independent shallow tree
         new_probs = []
         new_subtrees = []
 
         change = [True] * len(self.probs) if change is None else change 
+        subdepth = depth - 1 if depth is not None else None
 
         for prob, subnode, c in zip(self.probs, self.subtrees, change):
             if not c or not isinstance(subnode, TreeNode):
@@ -179,25 +229,29 @@ class TreeNode:
                 new_probs.append(prob)
                 new_subtrees.append(subnode)
             else:
-                subnode = subnode.collapse().multiply(prob)
+                subnode = subnode.flattern(depth=subdepth).multiply(prob)
                 # Multiple the prob back
                 new_probs.extend(subnode.probs)
                 new_subtrees.extend(subnode.subtrees)
 
         return TreeNode(new_probs, new_subtrees)
 
-    def random_collapse(self, collapse_prob=0.5):
-        if random.random() < collapse_prob:
-            return self.collapse()
+    def random_flattern(self, depth=None, flattern_prob=0.5):
+        if random.random() < flattern_prob:
+            return self.flattern(depth=depth)
         else:
+            if depth is not None and depth <= 0:
+                return self 
+
+            subdepth = depth - 1 if depth is not None else None
             new_subtrees = []
             for prob, subnode in zip(self.probs, self.subtrees):
                 if not isinstance(subnode, TreeNode):
                     # leaf, don't need to do anything. 
                     new_subtrees.append(subnode)
                 else:
-                    # collapse the child
-                    subnode = subnode.random_collapse(collapse_prob=collapse_prob)
+                    # flattern the child
+                    subnode = subnode.random_flattern(depth=subdepth, flattern_prob=flattern_prob)
                     new_subtrees.append(subnode)
 
         return TreeNode(self.probs, new_subtrees)
@@ -290,7 +344,7 @@ class Dataset:
                 flags[t] = True
                 all_flags.append(flags)
 
-        trees = [ tree.collapse(change=flags) for flags in all_flags ]
+        trees = [ tree.flattern(change=flags) for flags in all_flags ]
         return trees, 9
 
     @staticmethod
@@ -306,7 +360,25 @@ class Dataset:
         # Simply three classes
         layer3 = [ TreeNode([args.p3] * 2, [TreeNode.g(f"l2-{i}"), TreeNode.g(f"l2-{i+1}")], name=f"l3-{i}") for i in range(4) ] 
 
-        trees = [ tree.random_collapse(collapse_prob=0.3) for tree in layer3 for _ in range(3) ]
+        # print("==== Test random split ====")
+        # print("Original")
+        # print(layer3[0])
+        # print("After random splitting")
+        # print(layer3[0].random_split(desired_depth=1)) 
+        # print(layer3[0].random_split(desired_depth=2)) 
+        # print("==== End Test random split ====")
+
+        trees = []
+        for tree in layer3:
+            for d in [1, 2, 2]:
+                tree = tree.random_split(desired_depth=d) 
+            trees.append(tree)
+
+        trees = trees + layer3
+        # Also add all flatterned
+        trees = trees + [ tree.flattern() for tree in layer3 ] 
+
+        # trees = [ tree.random_flattern(depth=d, flattern_prob=0.5) for tree in layer3 for d in range(3) ]
         return trees, 12
         
 
@@ -339,7 +411,7 @@ class Dataset:
 
         self.gens = []
         for tree in trees:
-            print(tree)
+            log.info(tree)
             self.gens.append(HierGenerator(tree, self.M - 1, bg_token))
 
         self.num_class = len(self.gens)
