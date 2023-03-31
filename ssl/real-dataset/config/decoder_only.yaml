@@ -1,0 +1,30 @@
+niter: 1000
+seed: 1
+
+L: 6
+M: 24
+
+# dimension of embedding
+d: 8
+H: 2
+
+num_attributes: 2
+num_class_per_attribute: 5
+
+# batchsize
+batchsize: 128
+
+nlayer: 1
+
+use_WkWq: true 
+use_ffn: false
+use_residue: true
+
+normalize_embed_shift: false
+normalize_embed_scale: false
+
+opt:
+  method: "adam"
+  lr: 0.1
+  momentum: 0.9
+  wd: 5e-4

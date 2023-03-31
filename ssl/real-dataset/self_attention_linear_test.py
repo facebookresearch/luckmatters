@@ -369,10 +369,12 @@ class Dataset:
         # print("==== End Test random split ====")
 
         trees = []
-        for tree in layer3:
-            for d in [1, 2, 2]:
-                tree = tree.random_split(desired_depth=d) 
-            trees.append(tree)
+        for tree0 in layer3:
+            for _ in range(3):
+                tree = deepcopy(tree0)
+                for d in [1, 2, 2]:
+                    tree = tree.random_split(desired_depth=d) 
+                trees.append(tree)
 
         trees = trees + layer3
         # Also add all flatterned
