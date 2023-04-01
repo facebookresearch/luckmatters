@@ -1,4 +1,5 @@
 from copy import deepcopy
+import itertools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -36,9 +37,13 @@ class SABlock(nn.Module):
             self.w2 = nn.Linear(2*d, d)
             self.relu = nn.ReLU()
 
+        self.ln = nn.LayerNorm(d)
+
         self.d = d
 
     def forward(self, embed):
+        # apply layer norm
+        embed = self.ln(embed) 
         if self.use_WkWq:
             # [bs, L, d]
             Q_sel = self.Wq(embed)
@@ -129,7 +134,6 @@ class Model(nn.Module):
 class Dataset:
     def __init__(self, args):
         self.L = args.L
-        self.M = args.M
 
         self.num_attributes = args.num_attributes
         self.num_class_per_attribute = args.num_class_per_attribute
@@ -139,10 +143,27 @@ class Dataset:
         # For each token, we first pick up to B attributes, and for each attribute randomly pick a class. 
         # Then during generation, we first pick a token as the label, then for each class it is in, pick other tokens that also belong to the same class as part of the sequence. 
 
+        # First create an identity matrix. 
+        tokens = []
+
+        for num_picked_attrs in range(1, self.num_attributes + 1):
+            # args.num_attributes choose num_picked_attrs
+            for chosen_attrs in itertools.combinations(list(range(self.num_attributes)), num_picked_attrs):
+                classes = [ list(range(self.num_class_per_attribute)) for a in chosen_attrs ]
+                for class_comb in itertools.product(*classes):
+                    row = torch.zeros(self.num_attributes, self.num_class_per_attribute, dtype=torch.long)
+                    for a, c in zip(chosen_attrs, class_comb):
+                        row[a, c] = 1
+                    tokens.append(row.view(-1))
+
+        tokens = torch.stack(tokens, dim=0)
+
+        self.M = tokens.size(0)
+        log.info(f"Generate {self.M} tokens. Not using args.M = {args.M}.")
+
+        '''
         all_attributes = list(range(self.num_attributes))
-
         tokens = torch.zeros(self.M, self.num_attributes * self.num_class_per_attribute, dtype=torch.long)
-
         for i in range(self.M):
             # pick up to B attributes
             num_atts = random.randint(1, self.num_attributes)
@@ -152,10 +173,20 @@ class Dataset:
             for a in attrs:
                 class_idx = random.randint(0, self.num_class_per_attribute - 1)
                 tokens[i, a * self.num_class_per_attribute + class_idx] = 1
+        '''
 
         tokens_each_class = [None] * tokens.size(1)
         for j in range(tokens.size(1)):
-            tokens_each_class[j] = tokens[:,j].nonzero()[0].tolist()
+            tokens_each_class[j] = tokens[:,j].nonzero().squeeze(1).tolist()
+
+        # Add class permutation within each attribute
+        perm_mapping = dict()
+        for i in range(self.num_attributes):
+            perm = list(range(self.num_class_per_attribute))
+            random.shuffle(perm)
+            for c, p in enumerate(perm):
+                perm_mapping[i * self.num_class_per_attribute + c] = i * self.num_class_per_attribute + p 
+        self.perm_mapping = perm_mapping
 
         self.tokens = tokens
         self.tokens_each_class = tokens_each_class
@@ -178,11 +209,10 @@ class Dataset:
         label = torch.randint(0, self.M, (batchsize,))
         for i in range(batchsize):
             # For each (attr, class), collect all tokens that also belong to this class. 
-            classes = self.tokens[label[i],:].nonzero()[0].tolist()
-            # import pdb 
-            # pdb.set_trace()
+            classes = self.tokens[label[i],:].nonzero().squeeze(1).tolist()
             for l in range(self.L):
                 c = random.choice(classes)
+                c = self.perm_mapping[c]
                 x[i,l] = random.choice(self.tokens_each_class[c])
 
         return x, label         
@@ -197,6 +227,8 @@ def main(args):
     torch.save(dict(tokens=dataset.tokens), "tokens.pth")
 
     model = Model(dataset.M, dataset.L, args.d, args.H, args)
+    model = model.cuda()
+    model.train()
 
     if args.opt.method == "adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=args.opt.lr, weight_decay=args.opt.wd)
@@ -213,10 +245,13 @@ def main(args):
     for t in range(args.niter):
         optimizer.zero_grad()
 
-        if t % 1000 == 0:
+        if t % 100 == 0:
             torch.save(dict(model=model.state_dict()), f"iter-{t}.pth")
 
         x, label = dataset.generate(args.batchsize)
+        x = x.cuda()
+        label = label.cuda()
+
         output = model(x)
 
         loss = loss_func(output, label)

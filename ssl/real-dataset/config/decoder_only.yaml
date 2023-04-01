@@ -12,7 +12,7 @@ num_attributes: 2
 num_class_per_attribute: 5
 
 # batchsize
-batchsize: 128
+batchsize: 512
 
 nlayer: 1
 
