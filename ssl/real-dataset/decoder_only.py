@@ -104,10 +104,13 @@ class Model(nn.Module):
             [ SABlock(d, H, args) for l in range(args.nlayer) ]
         )
 
+        self.loss_func = torch.nn.CrossEntropyLoss() 
+
         self.d = d
         self.L = L
+        self.use_random_grad = args.use_random_grad
         
-    def forward(self, x):
+    def forward(self, x, label):
         # x is size (bs, L) of type LongTensor, L is the length of the seq
         x_input = x.clone()
 
@@ -118,8 +121,13 @@ class Model(nn.Module):
         for b in self.blocks:
             output = b(output)
 
-        v = output[:,-1,:].squeeze()
-        return v @ self.embed.weight.t()
+        if self.use_random_grad:
+            random_weight = torch.randn_like(output[:,-1,:].squeeze()) * 0.1 
+            return (random_weight * output[:,-1,:].squeeze()).sum()
+        else:
+            v = output[:,-1,:].squeeze()
+            logits = v @ self.embed.weight.t() 
+            return self.loss_func(logits, label)
 
     def normalize(self):
         # Normalize the embedding (should be realized by layernorm)
@@ -137,6 +145,8 @@ class Dataset:
 
         self.num_attributes = args.num_attributes
         self.num_class_per_attribute = args.num_class_per_attribute
+        self.num_max_picked_attributes = args.num_max_picked_attributes if args.num_max_picked_attributes is not None else self.num_class_per_attribute
+        self.token_dup = args.token_dup 
 
         # Generate the following data distribution. 
         # There are A attributes (corresponding to A heads), each attribute has C classes. 
@@ -146,15 +156,17 @@ class Dataset:
         # First create an identity matrix. 
         tokens = []
 
-        for num_picked_attrs in range(1, self.num_attributes + 1):
+        for num_picked_attrs in range(1, self.num_max_picked_attributes + 1):
             # args.num_attributes choose num_picked_attrs
             for chosen_attrs in itertools.combinations(list(range(self.num_attributes)), num_picked_attrs):
                 classes = [ list(range(self.num_class_per_attribute)) for a in chosen_attrs ]
                 for class_comb in itertools.product(*classes):
                     row = torch.zeros(self.num_attributes, self.num_class_per_attribute, dtype=torch.long)
                     for a, c in zip(chosen_attrs, class_comb):
-                        row[a, c] = 1
-                    tokens.append(row.view(-1))
+                            row[a, c] = 1
+
+                    for j in range(self.token_dup):
+                        tokens.append(row.view(-1))
 
         tokens = torch.stack(tokens, dim=0)
 
@@ -179,17 +191,11 @@ class Dataset:
         for j in range(tokens.size(1)):
             tokens_each_class[j] = tokens[:,j].nonzero().squeeze(1).tolist()
 
-        # Add class permutation within each attribute
-        perm_mapping = dict()
-        for i in range(self.num_attributes):
-            perm = list(range(self.num_class_per_attribute))
-            random.shuffle(perm)
-            for c, p in enumerate(perm):
-                perm_mapping[i * self.num_class_per_attribute + c] = i * self.num_class_per_attribute + p 
-        self.perm_mapping = perm_mapping
-
         self.tokens = tokens
         self.tokens_each_class = tokens_each_class
+
+        self.perm_mapping = None
+        # self._init_perm_mapping()
 
         # Generate several classes
         # [0,1,2,3] -> class 0
@@ -204,6 +210,17 @@ class Dataset:
         self.clusters = clusters
         '''
 
+    def _init_perm_mapping(self):
+        # Add class permutation within each attribute
+        perm_mapping = dict()
+        for i in range(self.num_attributes):
+            perm = list(range(self.num_class_per_attribute))
+            random.shuffle(perm)
+            for c, p in enumerate(perm):
+                perm_mapping[i * self.num_class_per_attribute + c] = i * self.num_class_per_attribute + p 
+        self.perm_mapping = perm_mapping
+        
+
     def generate(self, batchsize):
         x = torch.LongTensor(batchsize, self.L)
         label = torch.randint(0, self.M, (batchsize,))
@@ -212,10 +229,13 @@ class Dataset:
             classes = self.tokens[label[i],:].nonzero().squeeze(1).tolist()
             for l in range(self.L):
                 c = random.choice(classes)
-                c = self.perm_mapping[c]
+                if self.perm_mapping is not None:
+                    c = self.perm_mapping[c]
                 x[i,l] = random.choice(self.tokens_each_class[c])
 
-        return x, label         
+        # make label random and see whether it can learn anything.
+        # label = torch.randint(0, self.M, (batchsize,))
+        return x, label 
         
 
 @hydra.main(config_path="config", config_name="decoder_only.yaml")
@@ -240,8 +260,6 @@ def main(args):
     # model_linear = LinearModel(dataset.L, dataset.num_class)
     # optimizer_linear = torch.optim.SGD(model_linear.parameters(), lr=args.opt.lr, momentum=args.opt.momentum, weight_decay=args.opt.wd)
 
-    loss_func = torch.nn.CrossEntropyLoss() 
-
     for t in range(args.niter):
         optimizer.zero_grad()
 
@@ -252,9 +270,7 @@ def main(args):
         x = x.cuda()
         label = label.cuda()
 
-        output = model(x)
-
-        loss = loss_func(output, label)
+        loss = model(x, label)
 
         if t % 100 == 0:
             log.info(f"[{t}] loss: {loss.detach().cpu().item()}")
