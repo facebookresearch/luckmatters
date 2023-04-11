@@ -13,20 +13,26 @@ num_attributes: 2
 num_max_picked_attributes: null
 num_class_per_attribute: 5
 token_dup: 1
+perm_mapping: true
 
 # batchsize
 batchsize: 512
 
 nlayer: 1
 
-use_WkWq: true 
+use_Wk: true 
+use_Wq: true 
+use_Wv: true
 use_ffn: false
 use_residue: true
+
+universal_Wv: false
+universal_WkWq: false
 
 use_random_grad: false
 
 normalize_embed_shift: false
-normalize_embed_scale: false
+normalize_embed_scale: none
 
 opt:
   method: "adam"

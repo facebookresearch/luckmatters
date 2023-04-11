@@ -17,20 +17,37 @@ class SABlock(nn.Module):
     def __init__(self, d, H, args):
         super(SABlock, self).__init__()
 
-        self.use_WkWq = args.use_WkWq
+        self.use_Wk = args.use_Wk
+        self.use_Wq = args.use_Wq
+        self.use_Wv = args.use_Wv
         self.use_ffn = args.use_ffn
         self.use_residue = args.use_residue
+
+        self.universal_Wv = args.universal_Wv
+        self.universal_WkWq = args.universal_WkWq
+
+        if self.universal_Wv:
+            self.use_Wk = False
+            self.use_Wq = False
+            self.use_Wv = True
+        elif self.universal_WkWq:
+            self.use_Wk = True
+            self.use_Wq = True
+            self.use_Wv = False
 
         # Number of heads, d % H == 0
         self.H = H
         assert d % H == 0, f"The dimension d = {d} should be divisible to the number of heads H = {H}"
         self.d_per_h = d // H
 
-        if self.use_WkWq:
+        if self.use_Wk:
             self.Wk = nn.Linear(d, d, bias=False)
+
+        if self.use_Wq:
             self.Wq = nn.Linear(d, d, bias=False)
 
-        self.Wv = nn.Linear(d, d)
+        if self.use_Wv:
+            self.Wv = nn.Linear(d, d, bias=False)
 
         if self.use_ffn:
             self.w1 = nn.Linear(d, 2*d)
@@ -43,18 +60,30 @@ class SABlock(nn.Module):
 
     def forward(self, embed):
         # apply layer norm
-        embed = self.ln(embed) 
-        if self.use_WkWq:
-            # [bs, L, d]
-            Q_sel = self.Wq(embed)
-            K_sel = self.Wk(embed)
-        else:
+        # embed = self.ln(embed) 
+        if self.universal_Wv:
+            K_sel = self.Wv(embed)
             Q_sel = embed
-            K_sel = embed
+        else:
+            if self.use_Wk:
+                # [bs, L, d]
+                K_sel = self.Wk(embed)
+            else:
+                K_sel = embed
+
+            if self.use_Wq:
+                Q_sel = self.Wq(embed)
+            else:
+                Q_sel = embed
 
         # of size [bs, L, V_dim]
         # V_sel = self.V(x_input)
-        V_sel = self.Wv(embed)
+        if self.use_Wv:
+            V_sel = self.Wv(embed)
+        elif self.universal_WkWq:
+            V_sel = F.linear(self.Wq(embed), self.Wk.weight.t())
+        else:
+            V_sel = embed
 
         outputs = []
         for h in range(self.H):
@@ -71,6 +100,7 @@ class SABlock(nn.Module):
             # 
             # Do self-attention (bs, L, L) per head
             attentions = F.softmax(attentions / math.sqrt(self.d_per_h), dim=2)
+            # attentions = F.softmax(attentions, dim=2)
 
             # attention size = [bs, L, L] 
             # V_sel_h size = [bs, L, V_dim_h]
@@ -122,8 +152,10 @@ class Model(nn.Module):
             output = b(output)
 
         if self.use_random_grad:
-            random_weight = torch.randn_like(output[:,-1,:].squeeze()) * 0.1 
-            return (random_weight * output[:,-1,:].squeeze()).sum()
+            # random_weight = torch.randn_like(output[:,-1,:].squeeze()) * 0.1 
+            # return (random_weight * output[:,-1,:].squeeze()).sum()
+            random_weight = torch.randn_like(output) * 0.1 
+            return (random_weight * output).sum()
         else:
             v = output[:,-1,:].squeeze()
             logits = v @ self.embed.weight.t() 
@@ -134,8 +166,14 @@ class Model(nn.Module):
         with torch.no_grad():
             if self.normalize_embed_shift:
                 self.embed.weight[:] = self.embed.weight - self.embed.weight.mean(dim=1, keepdim=True) 
-            if self.normalize_embed_scale:
+            if self.normalize_embed_scale == "std":
+                self.embed.weight[:] = self.embed.weight / self.embed.weight.std(dim=1, keepdim=True) 
+            elif self.normalize_embed_scale == "norm":
                 self.embed.weight[:] = self.embed.weight / self.embed.weight.norm(dim=1, keepdim=True) 
+            elif self.normalize_embed_scale == "none":
+                pass
+            else:
+                raise RuntimeError(f"Unknown normalize_embed_scale: {self.normalize_embed_scale}")
             # self.embed.weight[:] = self.embed.weight / self.embed.weight.norm() * 5 
 
 
@@ -194,8 +232,10 @@ class Dataset:
         self.tokens = tokens
         self.tokens_each_class = tokens_each_class
 
-        self.perm_mapping = None
-        # self._init_perm_mapping()
+        if args.perm_mapping:
+            self._init_perm_mapping()
+        else:
+            self.perm_mapping = None
 
         # Generate several classes
         # [0,1,2,3] -> class 0
