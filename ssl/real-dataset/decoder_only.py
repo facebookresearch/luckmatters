@@ -13,6 +13,20 @@ import os
 import logging
 log = logging.getLogger(__file__)
 
+def samples_from_set(N, excluded, k, replacement=True):
+    if isinstance(N, int):
+        a = set(range(N))
+    else:
+        a = set(N)
+
+    for b in excluded:
+        if b in a:
+            a.remove(b)
+    if replacement:
+        return random.choices(list(a), k=k)
+    else:
+        return random.sample(list(a), k)
+
 class SABlock(nn.Module):
     def __init__(self, d, H, args):
         super(SABlock, self).__init__()
@@ -22,6 +36,8 @@ class SABlock(nn.Module):
         self.use_Wv = args.use_Wv
         self.use_ffn = args.use_ffn
         self.use_residue = args.use_residue
+        self.use_ln = args.use_ln
+        self.gate = args.gate
 
         self.universal_Wv = args.universal_Wv
         self.universal_WkWq = args.universal_WkWq
@@ -50,17 +66,24 @@ class SABlock(nn.Module):
             self.Wv = nn.Linear(d, d, bias=False)
 
         if self.use_ffn:
-            self.w1 = nn.Linear(d, 2*d)
-            self.w2 = nn.Linear(2*d, d)
-            self.relu = nn.ReLU()
+            self.w1 = nn.Linear(d, 4*d)
+            self.w2 = nn.Linear(4*d, d)
+            if self.gate == "relu":
+                self.gate_func = nn.ReLU()
+            elif self.gate == "silu":
+                self.gate_func = nn.SiLU()
+            else:
+                raise RuntimeError(f"Unknown gate {self.gate} function!")
 
         self.ln = nn.LayerNorm(d)
 
         self.d = d
 
     def forward(self, embed):
-        # apply layer norm
-        # embed = self.ln(embed) 
+        if self.use_ln:
+            # apply layer norm
+            embed = self.ln(embed) 
+
         if self.universal_Wv:
             K_sel = self.Wv(embed)
             Q_sel = embed
@@ -110,15 +133,22 @@ class SABlock(nn.Module):
         # output size = [bs, L, V_dim]
         output = torch.cat(outputs, dim=2)
         # One additional linear layer missing here but we skip it for now. 
-
-        if self.use_ffn:
-            output = self.w2(self.relu(self.w1(output)))
-
-        # output size = [bs, L, d]
         if self.use_residue:
             output = output + embed
 
-        return output
+        if self.use_ffn:
+            if self.use_ln:
+                # apply layer norm
+                output = self.ln(output) 
+
+            output2 = self.w2(self.gate_func(self.w1(output)))
+            # output size = [bs, L, d]
+            if self.use_residue:
+                output2 = output2 + output
+
+            return output2
+        else:
+            return output
         
 
 class Model(nn.Module):
@@ -177,9 +207,106 @@ class Model(nn.Module):
             # self.embed.weight[:] = self.embed.weight / self.embed.weight.norm() * 5 
 
 
+class Dataset2:
+    def __init__(self, L, M, args):
+        self.L = L
+
+        self.M = M 
+
+        # generate the triples (the "facts")
+        all_pre_tokens = list(range(self.M // 2))
+        all_post_tokens = list(range(self.M // 2, self.M))
+
+        facts = []
+        forbid_tokens = dict()
+        base_tokens = random.sample(all_pre_tokens, args.num_groups)
+        # pick a base token (fact[1]) and two lists of additional conditions (fact[0]) and (fact[2]). 
+        # put them in the facts set. 
+
+        used_pre_tokens = base_tokens
+        used_post_tokens = []
+
+        for base_token in base_tokens:
+            pre_tokens = samples_from_set(all_pre_tokens, [], args.num_facts_per_group, replacement=False)
+            # pre_tokens = samples_from_set(all_pre_tokens, used_pre_tokens, args.num_facts_per_group, replacement=False)
+            post_tokens = samples_from_set(all_post_tokens, [], args.num_facts_per_group, replacement=False)
+            # post_tokens = samples_from_set(all_post_tokens, used_post_tokens, args.num_facts_per_group, replacement=False)
+
+            used_pre_tokens = used_pre_tokens + pre_tokens
+            used_post_tokens = used_post_tokens + post_tokens
+
+            for pre, post in zip(pre_tokens, post_tokens):
+                facts.append((pre, base_token, post))
+
+            forbid_tokens[base_token] = pre_tokens
+        self.facts = facts
+        self.forbid_tokens = forbid_tokens
+                    
+        # facts = dict()
+        # while len(facts) < args.num_facts:
+        #     v = tuple(random.sample(all_tokens, 3))
+        #     # the query token should be unique
+        #     # facts[v[1]] = v 
+        #     # The key/query tokens should be unique
+        #     facts[v[:1]] = v
+        # self.facts = list(facts.values())
+
+        # Simplest case.
+        # random.shuffle(all_tokens)
+        # self.facts = []
+        # for i in range(args.num_facts):
+        #     self.facts.append(tuple(all_tokens[3*i:3*i+3]))
+
+        log.info(f"Generated {len(self.facts)} facts: ")
+        log.info(self.facts)
+
+    def generate(self, batchsize):  
+        # Then when generating sequence, we pick locations that will place the fact tokens, and fill in other locations with random tokens. 
+        # e.g., given fact (ABC), then we generate a sequence xxxAxxxxB, and next token is C
+        # for other tokens, just replace x with a random token. 
+        x = torch.LongTensor(batchsize, self.L)
+        label = torch.LongTensor(batchsize)
+
+        all_token_locs_except_last = list(range(self.L - 1))
+
+        for i in range(batchsize):
+            # Pick a fact
+            fact = random.choice(self.facts)
+            base = fact[-2]
+
+            x[i, :-1] = torch.LongTensor(samples_from_set(self.M, [base] + self.forbid_tokens[base], self.L - 1))
+            x[i, -1] = base
+            label[i] = fact[-1]
+            # Put everything else to a random location. 
+            locs = random.sample(all_token_locs_except_last, len(fact) - 2)
+            for l, c in zip(locs, fact[:-2]):
+                x[i, l] = c
+
+            # x[i, -1] = fact[-2]
+            # # Pick whether we want to make a positive or a negative sample of that fact
+            # pn = random.randint(0, 1) 
+            # if pn == 1:
+            #     # positive sample
+            #     x[i, :-1] = torch.randint(0, self.M, (self.L - 1,))
+            #     label[i] = fact[-1]
+            #     # Put everything else to a random location. 
+            #     locs = random.sample(all_token_locs_except_last, len(fact) - 2)
+            #     for l, c in zip(locs, fact[:-2]):
+            #         x[i, l] = c
+            # else:
+            #     # negative sample, for now just get rid of first token. 
+            #     x[i, :-1] = torch.LongTensor(samples_from_set(self.M, [fact[0]], self.L - 1))
+            #     # label is anything but fact[-1]
+            #     label[i] = torch.LongTensor(samples_from_set(self.M, [fact[-1]], 1))
+
+            # # print(f"{pn}: fact = {fact}, x = {x[i,:]}, label = {label[i]}")
+
+        return x, label
+
+
 class Dataset:
-    def __init__(self, args):
-        self.L = args.L
+    def __init__(self, L, M, args):
+        self.L = L
 
         self.num_attributes = args.num_attributes
         self.num_class_per_attribute = args.num_class_per_attribute
@@ -209,7 +336,7 @@ class Dataset:
         tokens = torch.stack(tokens, dim=0)
 
         self.M = tokens.size(0)
-        log.info(f"Generate {self.M} tokens. Not using args.M = {args.M}.")
+        log.info(f"Generate {self.M} tokens. Not using prespecified M = {M}.")
 
         '''
         all_attributes = list(range(self.num_attributes))
@@ -283,8 +410,10 @@ def main(args):
     log.info(common_utils.print_info(args))
     common_utils.set_all_seeds(args.seed)
 
-    dataset = Dataset(args)
-    torch.save(dict(tokens=dataset.tokens), "tokens.pth")
+    # dataset = Dataset(args.L, args.M, args.dataset)
+    dataset = Dataset2(args.L, args.M, args.dataset)
+    # torch.save(dict(tokens=dataset.tokens), "tokens.pth")
+    torch.save(dict(facts=dataset.facts), "facts.pth")
 
     model = Model(dataset.M, dataset.L, args.d, args.H, args)
     model = model.cuda()

@@ -8,12 +8,17 @@ M: 24
 d: 8
 H: 2
 
-num_attributes: 2
-# if null, then we set num_max_picked_attributes == num_attributes
-num_max_picked_attributes: null
-num_class_per_attribute: 5
-token_dup: 1
-perm_mapping: true
+# dataset:
+#   num_attributes: 2
+#   # if null, then we set num_max_picked_attributes == num_attributes
+#   num_max_picked_attributes: null
+#   num_class_per_attribute: 5
+#   token_dup: 1
+#   perm_mapping: true
+
+dataset:
+  num_groups: 5
+  num_facts_per_group: 4
 
 # batchsize
 batchsize: 512
@@ -25,6 +30,9 @@ use_Wq: true
 use_Wv: true
 use_ffn: false
 use_residue: true
+use_ln: false
+
+gate: relu
 
 universal_Wv: false
 universal_WkWq: false
