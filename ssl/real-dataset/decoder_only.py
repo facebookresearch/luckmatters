@@ -76,13 +76,14 @@ class SABlock(nn.Module):
                 raise RuntimeError(f"Unknown gate {self.gate} function!")
 
         self.ln = nn.LayerNorm(d)
+        self.ln2 = nn.LayerNorm(d)
 
         self.d = d
 
     def forward(self, embed):
-        if self.use_ln:
+        # if self.use_ln:
             # apply layer norm
-            embed = self.ln(embed) 
+        #     embed = self.ln(embed) 
 
         if self.universal_Wv:
             K_sel = self.Wv(embed)
@@ -136,20 +137,23 @@ class SABlock(nn.Module):
         if self.use_residue:
             output = output + embed
 
-        if self.use_ffn:
-            if self.use_ln:
-                # apply layer norm
-                output = self.ln(output) 
+        if self.use_ln:
+            # apply layer norm
+            output = self.ln(output) 
 
-            output2 = self.w2(self.gate_func(self.w1(output)))
-            # output size = [bs, L, d]
-            if self.use_residue:
-                output2 = output2 + output
-
-            return output2
-        else:
+        if not self.use_ffn:
             return output
-        
+
+        output2 = self.w2(self.gate_func(self.w1(output)))
+        # output size = [bs, L, d]
+        if self.use_residue:
+            output2 = output2 + output
+        if self.use_ln:
+            # apply layer norm
+            output2 = self.ln2(output2) 
+
+        return output2
+    
 
 class Model(nn.Module):
     def __init__(self, M, L, d, H, args):
@@ -189,6 +193,11 @@ class Model(nn.Module):
         else:
             v = output[:,-1,:].squeeze()
             logits = v @ self.embed.weight.t() 
+            # simple loss (now with softmax alpha it works)
+            # with torch.no_grad():
+            #     alpha = F.softmax(logits, dim=1)
+            # alpha = torch.ones_like(logits) / logits.size(1)
+            # return -(logits.gather(1, label.unsqueeze(1)).squeeze(1) - (logits * alpha).sum(dim=1)).mean()
             return self.loss_func(logits, label)
 
     def normalize(self):
