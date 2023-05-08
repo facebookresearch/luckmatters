@@ -16,6 +16,8 @@ H: 2
 #   token_dup: 1
 #   perm_mapping: true
 
+model2_normalize: true
+
 dataset:
   num_groups: 5
   num_facts_per_group: 4

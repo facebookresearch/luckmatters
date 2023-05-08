@@ -215,6 +215,48 @@ class Model(nn.Module):
                 raise RuntimeError(f"Unknown normalize_embed_scale: {self.normalize_embed_scale}")
             # self.embed.weight[:] = self.embed.weight / self.embed.weight.norm() * 5 
 
+class Model2(nn.Module):
+    def __init__(self, M, L, args):
+        super(Model2, self).__init__()
+        self.M = M
+        self.L = L
+
+        # top-layer pairwise weight
+        self.K1 = nn.Linear(M, M, bias=False)
+        # attention layer pairwise weight
+        self.K2 = nn.Linear(M, M, bias=False)
+
+        self.model2_normalize = args.model2_normalize
+
+        # a global shift of each row of K1/K2 doesn't matter, so move it to zero
+        with torch.no_grad():
+            self.K1.weight[:] = self.K1.weight - self.K1.weight.mean(dim=1, keepdim=True)
+            self.K2.weight[:] = self.K2.weight - self.K2.weight.mean(dim=1, keepdim=True)
+
+        self.loss_func = torch.nn.CrossEntropyLoss() 
+
+    def forward(self, x, label):
+        # x: [batchsize, self.L]
+        # get one hot
+        batchsize = x.size(0)
+        # one_hot: [batchsize, self.L, self.M]
+        X = F.one_hot(x, num_classes=self.M).float().to(x.device)
+        inner_prod = torch.bmm(self.K2(X), X[:,-1,:].unsqueeze(2)).squeeze(2)
+        # attns to the last token: [batchsize, self.L]
+        attns = F.softmax(inner_prod, dim=1)
+        # combined: [batchsize, self.M]
+        combined = torch.bmm(attns.unsqueeze(1), X).squeeze(1)
+
+        if self.model2_normalize:
+            # normalized 
+            combined = combined / combined.norm(dim=1, keepdim=True)
+
+        logits = self.K1(combined)
+        
+        return self.loss_func(logits, label)
+
+    def normalize(self):
+        pass
 
 class Dataset2:
     def __init__(self, L, M, args):
@@ -424,7 +466,8 @@ def main(args):
     # torch.save(dict(tokens=dataset.tokens), "tokens.pth")
     torch.save(dict(facts=dataset.facts), "facts.pth")
 
-    model = Model(dataset.M, dataset.L, args.d, args.H, args)
+    # model = Model(dataset.M, dataset.L, args.d, args.H, args)
+    model = Model2(dataset.M, dataset.L, args)
     model = model.cuda()
     model.train()
 
