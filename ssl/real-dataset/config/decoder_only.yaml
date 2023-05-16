@@ -18,6 +18,18 @@ H: 2
 
 model2_normalize: true
 
+dataset2:
+  num_last_tokens: 1
+  num_next_tokens_per_last_token: 2
+
+  num_common_tokens: 10
+  common_unnormalized_prob: 1
+
+  num_unique_per_next_token: 10
+
+  unique_unnormalized_min: 0.1
+  unique_unnormalized_max: 1
+
 dataset:
   num_groups: 5
   num_facts_per_group: 4

@@ -230,8 +230,12 @@ class Model2(nn.Module):
 
         # a global shift of each row of K1/K2 doesn't matter, so move it to zero
         with torch.no_grad():
-            self.K1.weight[:] = self.K1.weight - self.K1.weight.mean(dim=1, keepdim=True)
-            self.K2.weight[:] = self.K2.weight - self.K2.weight.mean(dim=1, keepdim=True)
+            # self.K1.weight[:] = self.K1.weight - self.K1.weight.mean(dim=1, keepdim=True)
+            # self.K2.weight[:] = self.K2.weight - self.K2.weight.mean(dim=1, keepdim=True)
+
+            # Initialize K1 and K2 to 0
+            self.K1.weight[:] = 0
+            self.K2.weight[:] = 0
 
         self.loss_func = torch.nn.CrossEntropyLoss() 
 
@@ -239,13 +243,23 @@ class Model2(nn.Module):
         # x: [batchsize, self.L]
         # get one hot
         batchsize = x.size(0)
+
+        attn_include_base_token = False 
+
         # one_hot: [batchsize, self.L, self.M]
         X = F.one_hot(x, num_classes=self.M).float().to(x.device)
-        inner_prod = torch.bmm(self.K2(X), X[:,-1,:].unsqueeze(2)).squeeze(2)
-        # attns to the last token: [batchsize, self.L]
+
+        if attn_include_base_token:
+            X_key = X
+        else:
+            X_key = X[:,:-1,:]
+        
+        inner_prod = torch.bmm(self.K2(X_key), X[:,-1,:].unsqueeze(2)).squeeze(2)
+
+        # attns to the last token: [batchsize, self.L-1]
         attns = F.softmax(inner_prod, dim=1)
         # combined: [batchsize, self.M]
-        combined = torch.bmm(attns.unsqueeze(1), X).squeeze(1)
+        combined = torch.bmm(attns.unsqueeze(1), X_key).squeeze(1)
 
         if self.model2_normalize:
             # normalized 
@@ -259,54 +273,61 @@ class Model2(nn.Module):
         pass
 
 class Dataset2:
-    def __init__(self, L, M, args):
+    def __init__(self, L, args):
         self.L = L
 
-        self.M = M 
-
         # generate the triples (the "facts")
-        all_pre_tokens = list(range(self.M // 2))
-        all_post_tokens = list(range(self.M // 2, self.M))
+        # So we have three types of tokens. 
+        self.num_last_tokens = args.num_last_tokens
+        self.num_next_tokens_per_last_token = args.num_next_tokens_per_last_token
+        
+        num_next_tokens = self.num_last_tokens * self.num_next_tokens_per_last_token
 
+        # common starts from 0
+        self.num_common_tokens = args.num_common_tokens
+        self.common_unnormalized_prob = args.common_unnormalized_prob
+
+        # unique starts from num_common_tokens + num_unique_per_next_token * [seq_class_idx, seq_class_idx+1]
+        self.num_unique_per_next_token = args.num_unique_per_next_token
+        self.unique_unnormalized_min = args.unique_unnormalized_min
+        self.unique_unnormalized_max = args.unique_unnormalized_max
+
+        unique_idx = 0
+        last_token_offset = self.num_common_tokens + self.num_unique_per_next_token * num_next_tokens 
+        next_token_offset = last_token_offset + self.num_last_tokens
+        
         facts = []
-        forbid_tokens = dict()
-        base_tokens = random.sample(all_pre_tokens, args.num_groups)
-        # pick a base token (fact[1]) and two lists of additional conditions (fact[0]) and (fact[2]). 
-        # put them in the facts set. 
 
-        used_pre_tokens = base_tokens
-        used_post_tokens = []
+        for m in range(self.num_last_tokens):
+            for j in range(self.num_next_tokens_per_last_token):
+                # Generate conditional probability
+                unique_probs = torch.linspace(
+                    self.unique_unnormalized_min, 
+                    self.unique_unnormalized_max, 
+                    self.num_unique_per_next_token
+                )
+                unique_start = self.num_common_tokens + self.num_unique_per_next_token * unique_idx 
+                unique_end = unique_start + self.num_unique_per_next_token 
 
-        for base_token in base_tokens:
-            pre_tokens = samples_from_set(all_pre_tokens, [], args.num_facts_per_group, replacement=False)
-            # pre_tokens = samples_from_set(all_pre_tokens, used_pre_tokens, args.num_facts_per_group, replacement=False)
-            post_tokens = samples_from_set(all_post_tokens, [], args.num_facts_per_group, replacement=False)
-            # post_tokens = samples_from_set(all_post_tokens, used_post_tokens, args.num_facts_per_group, replacement=False)
+                common_probs = torch.ones(self.num_common_tokens) * self.common_unnormalized_prob
 
-            used_pre_tokens = used_pre_tokens + pre_tokens
-            used_post_tokens = used_post_tokens + post_tokens
+                all_probs = torch.cat([common_probs, unique_probs], dim=0) 
+                all_tokens = list(range(self.num_common_tokens)) + list(range(unique_start, unique_end))
 
-            for pre, post in zip(pre_tokens, post_tokens):
-                facts.append((pre, base_token, post))
+                all_probs = all_probs / all_probs.sum()
 
-            forbid_tokens[base_token] = pre_tokens
+                # Then fill in the table. 
+                facts.append(dict(
+                    probs = all_probs,
+                    tokens = torch.LongTensor(all_tokens),
+                    last_token = last_token_offset + m,
+                    next_token = next_token_offset + unique_idx  
+                ))
+
+                unique_idx += 1
+
+        self.M = next_token_offset + num_next_tokens 
         self.facts = facts
-        self.forbid_tokens = forbid_tokens
-                    
-        # facts = dict()
-        # while len(facts) < args.num_facts:
-        #     v = tuple(random.sample(all_tokens, 3))
-        #     # the query token should be unique
-        #     # facts[v[1]] = v 
-        #     # The key/query tokens should be unique
-        #     facts[v[:1]] = v
-        # self.facts = list(facts.values())
-
-        # Simplest case.
-        # random.shuffle(all_tokens)
-        # self.facts = []
-        # for i in range(args.num_facts):
-        #     self.facts.append(tuple(all_tokens[3*i:3*i+3]))
 
         log.info(f"Generated {len(self.facts)} facts: ")
         log.info(self.facts)
@@ -318,37 +339,15 @@ class Dataset2:
         x = torch.LongTensor(batchsize, self.L)
         label = torch.LongTensor(batchsize)
 
-        all_token_locs_except_last = list(range(self.L - 1))
-
         for i in range(batchsize):
             # Pick a fact
             fact = random.choice(self.facts)
-            base = fact[-2]
 
-            x[i, :-1] = torch.LongTensor(samples_from_set(self.M, [base] + self.forbid_tokens[base], self.L - 1))
-            x[i, -1] = base
-            label[i] = fact[-1]
-            # Put everything else to a random location. 
-            locs = random.sample(all_token_locs_except_last, len(fact) - 2)
-            for l, c in zip(locs, fact[:-2]):
-                x[i, l] = c
-
-            # x[i, -1] = fact[-2]
-            # # Pick whether we want to make a positive or a negative sample of that fact
-            # pn = random.randint(0, 1) 
-            # if pn == 1:
-            #     # positive sample
-            #     x[i, :-1] = torch.randint(0, self.M, (self.L - 1,))
-            #     label[i] = fact[-1]
-            #     # Put everything else to a random location. 
-            #     locs = random.sample(all_token_locs_except_last, len(fact) - 2)
-            #     for l, c in zip(locs, fact[:-2]):
-            #         x[i, l] = c
-            # else:
-            #     # negative sample, for now just get rid of first token. 
-            #     x[i, :-1] = torch.LongTensor(samples_from_set(self.M, [fact[0]], self.L - 1))
-            #     # label is anything but fact[-1]
-            #     label[i] = torch.LongTensor(samples_from_set(self.M, [fact[-1]], 1))
+            # sample the probability distribution
+            indices = torch.multinomial(fact["probs"], self.L - 1, replacement=True)
+            x[i,:-1] = fact["tokens"][indices]
+            x[i,-1] = fact["last_token"]
+            label[i] = fact["next_token"]
 
             # # print(f"{pn}: fact = {fact}, x = {x[i,:]}, label = {label[i]}")
 
@@ -462,7 +461,7 @@ def main(args):
     common_utils.set_all_seeds(args.seed)
 
     # dataset = Dataset(args.L, args.M, args.dataset)
-    dataset = Dataset2(args.L, args.M, args.dataset)
+    dataset = Dataset2(args.L, args.dataset2)
     # torch.save(dict(tokens=dataset.tokens), "tokens.pth")
     torch.save(dict(facts=dataset.facts), "facts.pth")
 
