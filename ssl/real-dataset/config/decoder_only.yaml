@@ -16,17 +16,14 @@ H: 2
 #   token_dup: 1
 #   perm_mapping: true
 
-model2_normalize: true
-
 dataset2:
-  num_last_tokens: 1
-  num_next_tokens_per_last_token: 2
+  num_last: 2
+  num_next_per_last: 2
+  num_common: 10
+  num_common_per_last: 5
+  num_unique_per_next: 10
 
-  num_common_tokens: 10
   common_unnormalized_prob: 1
-
-  num_unique_per_next_token: 10
-
   unique_unnormalized_min: 0.1
   unique_unnormalized_max: 1
 
@@ -37,24 +34,34 @@ dataset:
 # batchsize
 batchsize: 512
 
-nlayer: 1
+save_per_minibatch: 100
 
-use_Wk: true 
-use_Wq: true 
-use_Wv: true
-use_ffn: false
-use_residue: true
-use_ln: false
+model:
+  nlayer: 1
 
-gate: relu
+  use_Wk: true 
+  use_Wq: true 
+  use_Wv: true
+  use_ffn: false
+  use_residue: true
+  use_ln: false
 
-universal_Wv: false
-universal_WkWq: false
+  gate: relu
 
-use_random_grad: false
+  universal_Wv: false
+  universal_WkWq: false
 
-normalize_embed_shift: false
-normalize_embed_scale: none
+  normalize_embed_shift: false
+  normalize_embed_scale: none
+
+  use_random_grad: false
+
+model2:
+  attn_include_base_token: false
+  zero_init: true
+  normalize: true
+  residual: false
+
 
 opt:
   method: "adam"

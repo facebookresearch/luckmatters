@@ -226,7 +226,10 @@ class Model2(nn.Module):
         # attention layer pairwise weight
         self.K2 = nn.Linear(M, M, bias=False)
 
-        self.model2_normalize = args.model2_normalize
+        self.normalize_sa_output = args.normalize
+        self.zero_init = args.zero_init
+        self.attn_include_base_token = args.attn_include_base_token
+        self.residual = args.residual
 
         # a global shift of each row of K1/K2 doesn't matter, so move it to zero
         with torch.no_grad():
@@ -234,8 +237,9 @@ class Model2(nn.Module):
             # self.K2.weight[:] = self.K2.weight - self.K2.weight.mean(dim=1, keepdim=True)
 
             # Initialize K1 and K2 to 0
-            self.K1.weight[:] = 0
-            self.K2.weight[:] = 0
+            if self.zero_init:
+                self.K1.weight[:] = 0
+                self.K2.weight[:] = 0
 
         self.loss_func = torch.nn.CrossEntropyLoss() 
 
@@ -244,12 +248,10 @@ class Model2(nn.Module):
         # get one hot
         batchsize = x.size(0)
 
-        attn_include_base_token = False 
-
         # one_hot: [batchsize, self.L, self.M]
         X = F.one_hot(x, num_classes=self.M).float().to(x.device)
 
-        if attn_include_base_token:
+        if self.attn_include_base_token:
             X_key = X
         else:
             X_key = X[:,:-1,:]
@@ -261,7 +263,10 @@ class Model2(nn.Module):
         # combined: [batchsize, self.M]
         combined = torch.bmm(attns.unsqueeze(1), X_key).squeeze(1)
 
-        if self.model2_normalize:
+        if self.residual:
+            combined = combined + X[:,-1,:]
+
+        if self.normalize_sa_output:
             # normalized 
             combined = combined / combined.norm(dim=1, keepdim=True)
 
@@ -276,43 +281,56 @@ class Dataset2:
     def __init__(self, L, args):
         self.L = L
 
-        # generate the triples (the "facts")
-        # So we have three types of tokens. 
-        self.num_last_tokens = args.num_last_tokens
-        self.num_next_tokens_per_last_token = args.num_next_tokens_per_last_token
+        self.num_last = args.num_last
+        self.num_next_per_last = args.num_next_per_last
         
-        num_next_tokens = self.num_last_tokens * self.num_next_tokens_per_last_token
+        num_next = self.num_last * self.num_next_per_last
 
         # common starts from 0
-        self.num_common_tokens = args.num_common_tokens
+        self.num_common = args.num_common
         self.common_unnormalized_prob = args.common_unnormalized_prob
 
-        # unique starts from num_common_tokens + num_unique_per_next_token * [seq_class_idx, seq_class_idx+1]
-        self.num_unique_per_next_token = args.num_unique_per_next_token
+        # common within each last token category.
+        self.num_common_per_last = args.num_common_per_last
+
+        # unique starts from num_common + num_common_per_last * num_last + num_unique_per_next * [seq_class_idx, seq_class_idx+1]
+        self.num_unique_per_next = args.num_unique_per_next
         self.unique_unnormalized_min = args.unique_unnormalized_min
         self.unique_unnormalized_max = args.unique_unnormalized_max
 
-        unique_idx = 0
-        last_token_offset = self.num_common_tokens + self.num_unique_per_next_token * num_next_tokens 
-        next_token_offset = last_token_offset + self.num_last_tokens
+        common_per_last_offset = self.num_common
+        unique_offset = common_per_last_offset + self.num_common_per_last * self.num_last 
+        last_token_offset = unique_offset + self.num_unique_per_next * num_next
+        next_token_offset = last_token_offset + self.num_last
         
         facts = []
+        info = dict(
+            common_range = (0, self.num_common), 
+            common_per_last = []
+        )
+        unique_idx = 0
 
-        for m in range(self.num_last_tokens):
-            for j in range(self.num_next_tokens_per_last_token):
+        for m in range(self.num_last):
+            common_per_last_start = common_per_last_offset + m * self.num_common_per_last
+            common_per_last_end = common_per_last_start + self.num_common_per_last
+
+            info["common_per_last"].append((common_per_last_start, common_per_last_end))
+
+            for j in range(self.num_next_per_last):
                 # Generate conditional probability
                 unique_probs = torch.linspace(
                     self.unique_unnormalized_min, 
                     self.unique_unnormalized_max, 
-                    self.num_unique_per_next_token
+                    self.num_unique_per_next
                 )
-                unique_start = self.num_common_tokens + self.num_unique_per_next_token * unique_idx 
-                unique_end = unique_start + self.num_unique_per_next_token 
+                unique_start = unique_offset + self.num_unique_per_next * unique_idx 
+                unique_end = unique_start + self.num_unique_per_next 
 
-                common_probs = torch.ones(self.num_common_tokens) * self.common_unnormalized_prob
+                common_probs = torch.ones(self.num_common) * self.common_unnormalized_prob
+                common_per_last_probs = torch.ones(self.num_common_per_last) * self.common_unnormalized_prob
 
-                all_probs = torch.cat([common_probs, unique_probs], dim=0) 
-                all_tokens = list(range(self.num_common_tokens)) + list(range(unique_start, unique_end))
+                all_probs = torch.cat([common_probs, common_per_last_probs, unique_probs], dim=0) 
+                all_tokens = list(range(self.num_common)) + list(range(common_per_last_start, common_per_last_end)) + list(range(unique_start, unique_end))
 
                 all_probs = all_probs / all_probs.sum()
 
@@ -320,14 +338,17 @@ class Dataset2:
                 facts.append(dict(
                     probs = all_probs,
                     tokens = torch.LongTensor(all_tokens),
+                    common_per_last_range = (common_per_last_start, common_per_last_end),
+                    unique_range= (unique_start, unique_end),
                     last_token = last_token_offset + m,
                     next_token = next_token_offset + unique_idx  
                 ))
 
                 unique_idx += 1
 
-        self.M = next_token_offset + num_next_tokens 
+        self.M = next_token_offset + num_next 
         self.facts = facts
+        self.info = info 
 
         log.info(f"Generated {len(self.facts)} facts: ")
         log.info(self.facts)
@@ -466,7 +487,7 @@ def main(args):
     torch.save(dict(facts=dataset.facts), "facts.pth")
 
     # model = Model(dataset.M, dataset.L, args.d, args.H, args)
-    model = Model2(dataset.M, dataset.L, args)
+    model = Model2(dataset.M, dataset.L, args.model2)
     model = model.cuda()
     model.train()
 
@@ -483,7 +504,7 @@ def main(args):
     for t in range(args.niter):
         optimizer.zero_grad()
 
-        if t % 100 == 0:
+        if t % args.save_per_minibatch == 0:
             torch.save(dict(model=model.state_dict()), f"iter-{t}.pth")
 
         x, label = dataset.generate(args.batchsize)
@@ -492,7 +513,7 @@ def main(args):
 
         loss = model(x, label)
 
-        if t % 100 == 0:
+        if t % args.save_per_minibatch == 0:
             log.info(f"[{t}] loss: {loss.detach().cpu().item()}")
 
         loss.backward()
