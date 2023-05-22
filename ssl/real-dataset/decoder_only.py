@@ -491,10 +491,27 @@ def main(args):
     model = model.cuda()
     model.train()
 
+    if args.opt.lr_z is not None:
+        lr_z = args.opt.lr_z
+    else:
+        lr_z = args.opt.lr 
+
+    if args.opt.lr_y_multi_on_z is not None:
+        lr_y = lr_z * args.opt.lr_y_multi_on_z
+    elif args.opt.lr_y is not None:
+        lr_y = args.opt.lr_y
+    else:
+        lr_y = args.opt.lr
+
+    log.info(f"lr y = {lr_y}, lr z = {lr_z}")
+
     if args.opt.method == "adam":
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.opt.lr, weight_decay=args.opt.wd)
+        optimizer_y = torch.optim.Adam([model.K1.weight], lr=lr_y, weight_decay=args.opt.wd)
+        optimizer_z = torch.optim.Adam([model.K2.weight], lr=lr_z, weight_decay=args.opt.wd)
     elif args.opt.method == "sgd":
-        optimizer = torch.optim.SGD(model.parameters(), lr=args.opt.lr, momentum=args.opt.momentum, weight_decay=args.opt.wd)
+        # optimizer = torch.optim.SGD(model.parameters(), lr=args.opt.lr, momentum=args.opt.momentum, weight_decay=args.opt.wd)
+        optimizer_y = torch.optim.SGD([model.K1.weight], lr=lr_y, momentum=args.opt.momentum, weight_decay=args.opt.wd)
+        optimizer_z = torch.optim.SGD([model.K2.weight], lr=lr_z, momentum=args.opt.momentum, weight_decay=args.opt.wd)
     else:
         raise RuntimeError(f"unknown method {args.opt.method}")
 
@@ -502,7 +519,8 @@ def main(args):
     # optimizer_linear = torch.optim.SGD(model_linear.parameters(), lr=args.opt.lr, momentum=args.opt.momentum, weight_decay=args.opt.wd)
 
     for t in range(args.niter):
-        optimizer.zero_grad()
+        optimizer_y.zero_grad()
+        optimizer_z.zero_grad()
 
         if t % args.save_per_minibatch == 0:
             torch.save(dict(model=model.state_dict()), f"iter-{t}.pth")
@@ -517,7 +535,8 @@ def main(args):
             log.info(f"[{t}] loss: {loss.detach().cpu().item()}")
 
         loss.backward()
-        optimizer.step()
+        optimizer_y.step()
+        optimizer_z.step()
 
         '''
         if t % 1000 == 0:

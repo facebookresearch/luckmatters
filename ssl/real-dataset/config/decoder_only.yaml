@@ -66,5 +66,8 @@ model2:
 opt:
   method: "adam"
   lr: 0.1
+  lr_y: none,
+  lr_y_multi_on_z: none
+  lr_z: none,
   momentum: 0.9
-  wd: 5e-4
+  wd: 0
