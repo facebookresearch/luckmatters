@@ -180,7 +180,7 @@ def main(args):
 
     src_mask = generate_square_subsequent_mask(args.bptt).to(device)
 
-    for epoch in range(1, 2):
+    for epoch in range(1, args.num_epoch + 1):
         train(train_data, src_mask, model, args, epoch=epoch)
 
     collections = {}
@@ -196,10 +196,14 @@ def main(args):
         log.info(seq)
 
         val_ppl = math.exp(val_loss)
-        log.info(json.dumps(dict(filename=filename, val_loss = val_loss, val_ppl = val_ppl)))
-        collections[filename] = attn
+
+        # Iter
+        no_ext, _ = os.path.splitext(filename)
+        iter_num = int(no_ext[no_ext.rfind("_")+1:])
+        collections[iter_num] = dict(filename=filename, val_loss = val_loss, val_ppl = val_ppl, attn=attn)
 
     pickle.dump(collections, open("collections.pkl", "wb"))
+    log.info(os.getcwd())
 
 if __name__ == '__main__':
     main()
