@@ -21,7 +21,7 @@ from typing import Optional, Any, Union, Callable
 from datasets import load_dataset
 import matplotlib.pyplot as plt
 
-from torchtext.datasets import WikiText2
+from torchtext.datasets import WikiText2, WikiText103
 from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import build_vocab_from_iterator
 from transformers import OpenAIGPTConfig, AutoTokenizer, OpenAIGPTLMHeadModel 
@@ -91,7 +91,7 @@ def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0) -> Non
 
     model.train()  # turn on train mode
     total_loss = 0.
-    log_interval = 100
+    log_interval = 1000
     start_time = time.time()
 
     num_batches = len(train_data) // args.bptt
@@ -152,7 +152,13 @@ def main(args):
     log.info(common_utils.print_info(args))
     common_utils.set_all_seeds(args.seed)
 
-    train_iter, val_iter, test_iter = WikiText2()
+    if args.dataset == "wikitext2":
+        train_iter, val_iter, test_iter = WikiText2()
+    elif args.dataset == "wikitext103":
+        train_iter, val_iter, test_iter = WikiText103()
+    else:
+        raise RuntimeError(f"Unsupported dataset {args.dataset}")
+
     tokenizer = get_tokenizer('basic_english')
     vocab = build_vocab_from_iterator(map(tokenizer, train_iter), specials=['<unk>'])
     vocab.set_default_index(vocab['<unk>'])
