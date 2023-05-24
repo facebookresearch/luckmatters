@@ -131,6 +131,8 @@ def evaluate(eval_data : Tensor, src_mask, model: nn.Module, args) -> float:
     total_loss = 0.
     return_attn = 0
     return_seq = []
+    attn_entropy = []
+
     with torch.no_grad():
         for i in range(0, eval_data.size(0) - 1, args.bptt):
             data, targets = get_batch(eval_data, i, args.bptt)
@@ -140,11 +142,15 @@ def evaluate(eval_data : Tensor, src_mask, model: nn.Module, args) -> float:
             output, attention = model(data, src_mask)
             output_flat = output.view(-1, output.size(2))
             total_loss += seq_len * criterion(output_flat, targets).item()
+
+            # also compute attention entropy
+            attn_entropy.append([-(att * (att + 1e-8).log()).sum(dim=2).mean() for att in attention])
+
             if i==100*args.bptt:
                 batch_idx = 0
                 return_attn = [att[batch_idx,:,:] for att in attention]
                 return_seq = data[:,batch_idx]            
-    return total_loss / (len(eval_data) - 1), return_attn, return_seq
+    return total_loss / (len(eval_data) - 1), return_attn, return_seq, attn_entropy
 
 
 @hydra.main(config_path="config", config_name="decoder_wiki.yaml", version_base="1.1.1")
@@ -186,17 +192,24 @@ def main(args):
 
     src_mask = generate_square_subsequent_mask(args.bptt).to(device)
 
-    for epoch in range(1, args.num_epoch + 1):
-        train(train_data, src_mask, model, args, epoch=epoch)
+    if not args.eval_only:
+        for epoch in range(1, args.num_epoch + 1):
+            train(train_data, src_mask, model, args, epoch=epoch)
 
     collections = {}
     
     # Get validation loss + example attention.
+    # arrange them in a time order.
+    filenames = glob.glob("*.pt")
+    filenames.sort(key=os.path.getmtime)
 
-    for filename in glob.glob("*.pt"):
+    if args.eval_last:
+        filenames = [filenames[-1]]
+    
+    for filename in filenames:
         log.info(filename)
         model.load_state_dict(torch.load(filename))
-        val_loss, attn, seq = evaluate(val_data, src_mask, model, args)
+        val_loss, attn, seq, attn_entropy = evaluate(val_data, src_mask, model, args)
 
         seq = vocab.lookup_tokens(seq.tolist())
         log.info(seq)
@@ -206,9 +219,13 @@ def main(args):
         # Iter
         no_ext, _ = os.path.splitext(filename)
         iter_num = int(no_ext[no_ext.rfind("_")+1:])
-        collections[iter_num] = dict(filename=filename, val_loss = val_loss, val_ppl = val_ppl, attn=attn)
+        collections[iter_num] = dict(filename=filename, val_loss = val_loss, val_ppl = val_ppl, attn=attn, attn_entropy=attn_entropy)
 
-    pickle.dump(collections, open("collections.pkl", "wb"))
+    if args.eval_last:
+        pickle.dump(collections, open("collections_last.pkl", "wb"))
+    else:
+        pickle.dump(collections, open("collections.pkl", "wb"))
+        
     log.info(os.getcwd())
 
 if __name__ == '__main__':
