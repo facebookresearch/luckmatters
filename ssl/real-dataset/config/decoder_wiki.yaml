@@ -42,3 +42,6 @@ yzformer:
   normalize: true
   residual: true  
   seq_first: true
+
+opt:
+  lr: 1e-4

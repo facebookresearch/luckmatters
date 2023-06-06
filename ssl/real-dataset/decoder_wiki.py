@@ -95,7 +95,7 @@ def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0, last_a
     optimizer = torch.optim.SGD([{'params': [temp[1] for temp in params], 'lr': args.lr_z * args.lr_y_multi_on_z}, {'params': [temp[1] for temp in base_params], 'lr': args.lr_z}])
     '''
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.opt.lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
 
     model.train()  # turn on train mode
