@@ -1,0 +1,37 @@
+# embedding dimension
+emsize: 200 
+# dimension of the feedforward network model in ``nn.TransformerEncoder``
+d_hid: 200  
+# number of ``nn.TransformerEncoderLayer`` in ``nn.TransformerEncoder``
+nlayers: 1  
+# number of heads in ``nn.MultiheadAttention``
+nhead: 1  
+# dropout = 0.1  # dropout probability
+dropout: 0.2
+
+batch_size: 20
+eval_batch_size: 10
+
+bptt: 35
+
+seed: 1
+
+num_epoch: 5
+lr_y_multi_on_z: 1
+lr_z: 1
+
+log_interval: 10000
+
+dataset: wikitext2
+
+eval_only: false
+eval_last: false
+
+eval_models: null
+
+yzformer:
+  attn_include_base_token: false
+  zero_init: true
+  normalize: true
+  residual: false  
+  seq_first: true
