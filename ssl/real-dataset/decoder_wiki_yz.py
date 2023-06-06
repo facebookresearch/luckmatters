@@ -22,25 +22,30 @@ class YZBlock(nn.Module):
         super(YZBlock, self).__init__()
         self.M = M
 
+        self.bottleneck_dim = args.bottleneck_dim
+
         # top-layer pairwise weight
-        self.Y = nn.Linear(M, M, bias=False)
+        self.Y_pre = nn.Linear(M, self.bottleneck_dim, bias=False)
+        self.Y_post = nn.Linear(self.bottleneck_dim, M, bias=False)
+
         # attention layer pairwise weight
-        self.Z = nn.Linear(M, M, bias=False)
+        self.Z_pre = nn.Linear(M, self.bottleneck_dim, bias=False)
+        self.Z_post = nn.Linear(self.bottleneck_dim, M, bias=False)
 
         self.normalize_sa_output = args.normalize
         self.zero_init = args.zero_init
         self.attn_include_base_token = args.attn_include_base_token
         self.residual = args.residual
 
-        # a global shift of each row of K1/K2 doesn't matter, so move it to zero
-        with torch.no_grad():
-            # self.Y.weight[:] = self.Y.weight - self.Y.weight.mean(dim=1, keepdim=True)
-            # self.Z.weight[:] = self.Z.weight - self.Z.weight.mean(dim=1, keepdim=True)
+        # # a global shift of each row of K1/K2 doesn't matter, so move it to zero
+        # with torch.no_grad():
+        #     # self.Y.weight[:] = self.Y.weight - self.Y.weight.mean(dim=1, keepdim=True)
+        #     # self.Z.weight[:] = self.Z.weight - self.Z.weight.mean(dim=1, keepdim=True)
 
-            # Initialize Y and Z to 0
-            if self.zero_init:
-                self.Y.weight[:] = 0
-                self.Z.weight[:] = 0
+        #     # Initialize Y and Z to 0
+        #     if self.zero_init:
+        #         self.Y.weight[:] = 0
+        #         self.Z.weight[:] = 0
 
     def forward(self, X, src_mask):
         # x: [batchsize, seq_length, num_token]
@@ -49,7 +54,7 @@ class YZBlock(nn.Module):
         bs = X.size(0)
 
         # sa_key_sel: [batchsize, seq_length (key), num_token]
-        sa_key_sel = self.Z(X)
+        sa_key_sel = self.Z_post(self.Z_pre(X))
 
         # [batchsize, seq_length (query), seq_length (key)]
         inner_prod = torch.bmm(X, sa_key_sel.permute(0, 2, 1)) 
@@ -75,19 +80,23 @@ class YZBlock(nn.Module):
 
         # What happens to first few tokens? Their predictions are pretty much unstable..
 
-        return self.Y(combined), attns
+        res = self.Y_post(self.Y_pre(combined))
+        if self.residual:
+            res = res + combined
+
+        return res, attns
 
     def normalize(self):
         pass
 
 
 class YZFormer(nn.Module):
-    def __init__(self, vocab_size, num_layers, args):
+    def __init__(self, vocab_size, args):
         super(YZFormer, self).__init__()
         self.vocab_size = vocab_size
 
         # stack #layers of YZBlock
-        self.layers = nn.ModuleList([ YZBlock(self.vocab_size, args) for i in range(num_layers) ])
+        self.layers = nn.ModuleList([ YZBlock(self.vocab_size, args) for i in range(args.num_layers) ])
         self.nonlinearity = nn.ReLU()
 
         self.seq_first = args.seq_first
@@ -114,6 +123,6 @@ class YZFormer(nn.Module):
         all_attns.append(attns)
 
         if self.seq_first:
-            X = X.permute(1, 0, 2)
+            X = X.permute(1, 0, 2).contiguous()
 
         return X, all_attns

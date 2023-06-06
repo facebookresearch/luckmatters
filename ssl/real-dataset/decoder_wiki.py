@@ -30,6 +30,9 @@ from decoder_wiki_yz import YZFormer
 
 from decoder_wiki_util import TransformerModel, TransConfig, generate_square_subsequent_mask
 
+import wandb
+from omegaconf import OmegaConf 
+
 import logging
 log = logging.getLogger(__file__)
 
@@ -64,7 +67,7 @@ def get_batch(source: Tensor, i: int, bptt) -> Tuple[Tensor, Tensor]:
     target = source[i+1:i+1+seq_len].reshape(-1)
     return data, target
 
-def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0) -> None:
+def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0, last_accu_loss=0) -> None:
     criterion = nn.CrossEntropyLoss()
 
     '''
@@ -96,24 +99,34 @@ def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0) -> Non
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
 
     model.train()  # turn on train mode
-    total_loss = 0.
     start_time = time.time()
 
     num_batches = len(train_data) // args.bptt
     for batch, i in enumerate(range(0, train_data.size(0) - 1, args.bptt)):
-        
-        if (batch+(epoch-1)*num_batches) % args.log_interval == 0:
-            lr = scheduler.get_last_lr()[0]
-            ms_per_batch = (time.time() - start_time) * 1000 / args.log_interval
-            cur_loss = total_loss / args.log_interval
-            ppl = math.exp(cur_loss)
-            log.info(f'| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | '
-                f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
-                f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}')
-            total_loss = 0
+        total_batch_cnt = batch+(epoch-1)*num_batches
+        if total_batch_cnt % args.log_interval == 0:
+            # skip the first one (i == 0), which we record only the partial batch. 
+            if i > 0:
+                lr = scheduler.get_last_lr()[0]
+                ms_per_batch = (time.time() - start_time) * 1000 / args.log_interval
+                cur_loss = last_accu_loss / args.log_interval
+                ppl = math.exp(cur_loss)
+                log.info(f'| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | '
+                    f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
+                    f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}')
+                wandb.log({ 
+                    "train/step" : total_batch_cnt,
+                    "train/lr": lr,
+                    "train/loss": cur_loss, 
+                    "train/ppl": ppl
+                })
+            last_accu_loss = 0
             start_time = time.time()
-            best_model_params_path = f'model_medium_iter_{batch+(epoch-1)*num_batches}.pt'
+
+        if total_batch_cnt % args.save_interval == 0:
+            best_model_params_path = f'model_medium_iter_{total_batch_cnt}.pt'
             torch.save(model.state_dict(), best_model_params_path)
+
         data, targets = get_batch(train_data, i, args.bptt)
         seq_len = data.size(0)
         if seq_len != args.bptt:  # only on last batch
@@ -127,7 +140,9 @@ def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0) -> Non
         torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
         optimizer.step()
 
-        total_loss += loss.item()
+        last_accu_loss += loss.item()
+
+    return last_accu_loss
 
 def evaluate(eval_data : Tensor, src_mask, model: nn.Module, args) -> float:
     criterion = nn.CrossEntropyLoss()
@@ -164,6 +179,19 @@ def evaluate(eval_data : Tensor, src_mask, model: nn.Module, args) -> float:
 def main(args):
     log.info(common_utils.print_info(args))
     common_utils.set_all_seeds(args.seed)
+
+    run = wandb.init(
+        # Set the project where this run will be logged
+        project=os.path.basename(__file__),
+        # Track hyperparameters and run metadata
+        config=OmegaConf.to_container(args)
+    )
+
+    # define our custom x axis metric
+    wandb.define_metric("train/step")
+    # set all other train/ metrics to use this step
+    wandb.define_metric("train/*", step_metric="train/step")
+    wandb.define_metric("val/*", step_metric="train/step")
 
     if args.dataset == "wikitext2":
         train_iter, val_iter, test_iter = WikiText2()
@@ -213,19 +241,20 @@ def main(args):
     ntokens = len(vocab)  # size of vocabulary
     log.info(f"Vocab size: {ntokens}")
 
-    use_baseline = False
-
-    if use_baseline:
+    if args.use_baseline:
+        log.info(f"Use baseline model")
         config = TransConfig(ntokens, args.emsize, args.nhead, args.d_hid, args.nlayers, args.dropout)
         model = TransformerModel(config).to(device)
     else:
-        model = YZFormer(ntokens, 2, args.yzformer).to(device)
+        log.info(f"Use YZFormer model")
+        model = YZFormer(ntokens, args.yzformer).to(device)
 
     src_mask = generate_square_subsequent_mask(args.bptt).to(device)
 
     if not args.eval_only:
+        last_accu_loss = 0
         for epoch in range(1, args.num_epoch + 1):
-            train(train_data, src_mask, model, args, epoch=epoch)
+            last_accu_loss = train(train_data, src_mask, model, args, epoch=epoch, last_accu_loss=last_accu_loss)
 
     collections = []
     
@@ -247,6 +276,17 @@ def main(args):
         log.info(seq)
 
         val_ppl = math.exp(val_loss)
+
+        log.info(f"val_loss: {val_loss}, val_ppl: {val_ppl}")
+
+        name, _ = os.path.splitext(filename)
+        train_batch_cnt = int(name[name.rfind("_") + 1]) 
+
+        wandb.log({ 
+            "train/step" : train_batch_cnt,
+            "val/loss": val_loss, 
+            "val/ppl": val_ppl
+        })
 
         # Iter
         no_ext, _ = os.path.splitext(filename)

@@ -9,7 +9,7 @@ nhead: 1
 # dropout = 0.1  # dropout probability
 dropout: 0.2
 
-batch_size: 20
+batch_size: 20 
 eval_batch_size: 10
 
 bptt: 35
@@ -20,7 +20,8 @@ num_epoch: 5
 lr_y_multi_on_z: 1
 lr_z: 1
 
-log_interval: 10000
+log_interval: 100
+save_interval: 1000
 
 dataset: wikitext2
 
@@ -29,9 +30,13 @@ eval_last: false
 
 eval_models: null
 
+use_baseline: false
+
 yzformer:
+  num_layers: 3
   attn_include_base_token: false
   zero_init: true
   normalize: true
   residual: false  
   seq_first: true
+  bottleneck_dim: 256
