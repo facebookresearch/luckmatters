@@ -26,6 +26,8 @@ from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import build_vocab_from_iterator
 from transformers import OpenAIGPTConfig, AutoTokenizer, OpenAIGPTLMHeadModel 
 
+from decoder_wiki_yz import YZFormer
+
 from decoder_wiki_util import TransformerModel, TransConfig, generate_square_subsequent_mask
 
 import logging
@@ -64,6 +66,8 @@ def get_batch(source: Tensor, i: int, bptt) -> Tuple[Tensor, Tensor]:
 
 def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0) -> None:
     criterion = nn.CrossEntropyLoss()
+
+    '''
     my_list = [
         'transformer_encoder.layers.0.linear1.weight',
         'transformer_encoder.layers.0.linear1.bias',
@@ -86,21 +90,22 @@ def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0) -> Non
     # optimizer = torch.optim.SGD(model.parameters(), lr=2, momentum=0.0)
 
     optimizer = torch.optim.SGD([{'params': [temp[1] for temp in params], 'lr': args.lr_z * args.lr_y_multi_on_z}, {'params': [temp[1] for temp in base_params], 'lr': args.lr_z}])
-    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    '''
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
 
     model.train()  # turn on train mode
     total_loss = 0.
-    log_interval = 1000
     start_time = time.time()
 
     num_batches = len(train_data) // args.bptt
     for batch, i in enumerate(range(0, train_data.size(0) - 1, args.bptt)):
         
-        if (batch+(epoch-1)*num_batches) % log_interval == 0:
+        if (batch+(epoch-1)*num_batches) % args.log_interval == 0:
             lr = scheduler.get_last_lr()[0]
-            ms_per_batch = (time.time() - start_time) * 1000 / log_interval
-            cur_loss = total_loss / log_interval
+            ms_per_batch = (time.time() - start_time) * 1000 / args.log_interval
+            cur_loss = total_loss / args.log_interval
             ppl = math.exp(cur_loss)
             log.info(f'| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | '
                 f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
@@ -136,9 +141,11 @@ def evaluate(eval_data : Tensor, src_mask, model: nn.Module, args) -> float:
     with torch.no_grad():
         for i in range(0, eval_data.size(0) - 1, args.bptt):
             data, targets = get_batch(eval_data, i, args.bptt)
+
             seq_len = data.size(0)
             if seq_len != args.bptt:
                 src_mask = src_mask[:seq_len, :seq_len]
+
             output, attention = model(data, src_mask)
             output_flat = output.view(-1, output.size(2))
             total_loss += seq_len * criterion(output_flat, targets).item()
@@ -166,19 +173,36 @@ def main(args):
         raise RuntimeError(f"Unsupported dataset {args.dataset}")
 
     tokenizer = get_tokenizer('basic_english')
-    vocab = build_vocab_from_iterator(map(tokenizer, train_iter), specials=['<unk>'])
-    vocab.set_default_index(vocab['<unk>'])
 
     def data_process(raw_text_iter: dataset.IterableDataset) -> Tensor:
         """Converts raw text into a flat Tensor."""
         data = [torch.tensor(vocab(tokenizer(item)), dtype=torch.long) for item in raw_text_iter]
         return torch.cat(tuple(filter(lambda t: t.numel() > 0, data)))
 
-    # ``train_iter`` was "consumed" by the process of building the vocab,
-    # so we have to create it again
-    train_data = data_process(train_iter)
-    val_data = data_process(val_iter)
-    test_data = data_process(test_iter)
+    save_dest = os.path.expanduser(f"~/{args.dataset}_vocab.pkl")
+    if os.path.exists(save_dest):
+        log.info(f"Loading from {save_dest} ...")
+        all_data = pickle.load(open(save_dest, "rb"))
+        vocab = all_data["vocab"]
+        train_data = all_data["train_data"]
+        val_data = all_data["val_data"]
+        test_data = all_data["test_data"]
+        log.info(f"Loading complete")
+
+    else:
+        log.info(f"Building vocabs for {args.dataset} ...")
+        vocab = build_vocab_from_iterator(map(tokenizer, train_iter), specials=['<unk>'])
+        vocab.set_default_index(vocab['<unk>'])
+
+        # ``train_iter`` was "consumed" by the process of building the vocab,
+        # so we have to create it again
+        train_data = data_process(train_iter)
+        val_data = data_process(val_iter)
+        test_data = data_process(test_iter)
+
+        log.info(f"Building vocab complete. Saving to {save_dest}")
+        all_data = dict(vocab=vocab, train_data=train_data, val_data=val_data, test_data=test_data) 
+        pickle.dump(all_data, open(save_dest, "wb"))
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -187,8 +211,15 @@ def main(args):
     test_data = batchify(test_data, args.eval_batch_size, device)
 
     ntokens = len(vocab)  # size of vocabulary
-    config = TransConfig(ntokens, args.emsize, args.nhead, args.d_hid, args.nlayers, args.dropout)
-    model = TransformerModel(config).to(device)
+    log.info(f"Vocab size: {ntokens}")
+
+    use_baseline = False
+
+    if use_baseline:
+        config = TransConfig(ntokens, args.emsize, args.nhead, args.d_hid, args.nlayers, args.dropout)
+        model = TransformerModel(config).to(device)
+    else:
+        model = YZFormer(ntokens, 2, args.yzformer).to(device)
 
     src_mask = generate_square_subsequent_mask(args.bptt).to(device)
 
@@ -196,11 +227,12 @@ def main(args):
         for epoch in range(1, args.num_epoch + 1):
             train(train_data, src_mask, model, args, epoch=epoch)
 
-    collections = {}
+    collections = []
     
     # Get validation loss + example attention.
     # arrange them in a time order.
-    filenames = glob.glob("*.pt")
+
+    filenames = glob.glob(args.eval_models or "*.pt")
     filenames.sort(key=os.path.getmtime)
 
     if args.eval_last:
@@ -219,10 +251,12 @@ def main(args):
         # Iter
         no_ext, _ = os.path.splitext(filename)
         iter_num = int(no_ext[no_ext.rfind("_")+1:])
-        collections[iter_num] = dict(filename=filename, val_loss = val_loss, val_ppl = val_ppl, attn=attn, attn_entropy=attn_entropy)
+        collections.append(dict(iter_num=iter_num, filename=filename, val_loss=val_loss, val_ppl=val_ppl, attn=attn, attn_entropy=attn_entropy))
 
     if args.eval_last:
         pickle.dump(collections, open("collections_last.pkl", "wb"))
+    elif args.eval_models is not None:
+        pickle.dump(collections, open("collections_eval_models.pkl", "wb"))
     else:
         pickle.dump(collections, open("collections.pkl", "wb"))
         
