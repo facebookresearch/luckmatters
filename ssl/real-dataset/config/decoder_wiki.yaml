@@ -8,6 +8,8 @@ nlayers: 1
 nhead: 1  
 # dropout = 0.1  # dropout probability
 dropout: 0.2
+# use positional encoding
+use_pos: true
 
 batch_size: 20 
 eval_batch_size: 10
@@ -33,10 +35,10 @@ eval_models: null
 use_baseline: false
 
 yzformer:
-  num_layers: 3
+  num_layers: ${nlayers}
+  emsize: ${emsize}
   attn_include_base_token: false
   zero_init: true
   normalize: true
-  residual: false  
+  residual: true  
   seq_first: true
-  bottleneck_dim: 256

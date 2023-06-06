@@ -615,7 +615,7 @@ class TransConfig(PretrainedConfig):
     def __init__(
         self,
         ntoken: int, d_model: int, nhead: int, d_hid: int,
-                 nlayers: int, dropout: float = 0.5,
+                 nlayers: int, dropout: float = 0.5, use_pos: bool = True,
         **kwargs,
     ):
         self.ntoken = ntoken
@@ -623,7 +623,8 @@ class TransConfig(PretrainedConfig):
         self.nhead = nhead
         self.d_hid = d_hid
         self.nlayers = nlayers
-        self.dropout=dropout
+        self.dropout = dropout
+        self.use_pos = use_pos
         super().__init__(**kwargs)
 
 class TransformerModel(PreTrainedModel):
@@ -633,12 +634,16 @@ class TransformerModel(PreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.model_type = config.model_type
-        self.pos_encoder = PositionalEncoding(config.d_model, config.dropout)
         encoder_layers = TransformerEncoderLayer(config.d_model, config.nhead, config.d_hid, config.dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, config.nlayers)
         self.encoder = nn.Embedding(config.ntoken, config.d_model)
         self.d_model = config.d_model
         self.decoder = nn.Linear(config.d_model, config.ntoken)
+
+        if config.use_pos:
+            self.pos_encoder = PositionalEncoding(config.d_model, config.dropout)
+        else:
+            self.pos_encoder = None
 
         self.init_weights()
 
@@ -658,7 +663,8 @@ class TransformerModel(PreTrainedModel):
             output Tensor of shape ``[seq_len, batch_size, ntoken]``
         """
         src = self.encoder(src) * math.sqrt(self.d_model)
-        src = self.pos_encoder(src)
+        if self.pos_encoder is not None:
+            src = self.pos_encoder(src)
         output, attention = self.transformer_encoder(src, src_mask)
         output = self.decoder(output)
         return output, attention

@@ -22,15 +22,18 @@ class YZBlock(nn.Module):
         super(YZBlock, self).__init__()
         self.M = M
 
-        self.bottleneck_dim = args.bottleneck_dim
+        self.emsize = args.emsize
 
         # top-layer pairwise weight
-        self.Y_pre = nn.Linear(M, self.bottleneck_dim, bias=False)
-        self.Y_post = nn.Linear(self.bottleneck_dim, M, bias=False)
+        self.Y_pre = nn.Linear(M, self.emsize, bias=False)
+        self.Y_post = nn.Linear(self.emsize, M, bias=False)
 
         # attention layer pairwise weight
-        self.Z_pre = nn.Linear(M, self.bottleneck_dim, bias=False)
-        self.Z_post = nn.Linear(self.bottleneck_dim, M, bias=False)
+        self.Z_pre = nn.Linear(M, self.emsize, bias=False)
+        self.Z_post = nn.Linear(self.emsize, M, bias=False)
+
+        # relative positional encoding
+        # self.relative_z = torch.zeros(100, required_grad=True)
 
         self.normalize_sa_output = args.normalize
         self.zero_init = args.zero_init

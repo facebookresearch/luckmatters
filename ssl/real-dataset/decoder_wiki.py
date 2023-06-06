@@ -180,11 +180,16 @@ def main(args):
     log.info(common_utils.print_info(args))
     common_utils.set_all_seeds(args.seed)
 
+    # load overrided configure file. 
+    specified_cfg = common_utils.MultiRunUtil.load_cfg("./")
+    run_name = ",".join(specified_cfg)
+
     run = wandb.init(
         # Set the project where this run will be logged
         project=os.path.basename(__file__),
+        name=run_name,
         # Track hyperparameters and run metadata
-        config=OmegaConf.to_container(args)
+        config=OmegaConf.to_container(args, resolve=True)
     )
 
     # define our custom x axis metric
@@ -243,7 +248,7 @@ def main(args):
 
     if args.use_baseline:
         log.info(f"Use baseline model")
-        config = TransConfig(ntokens, args.emsize, args.nhead, args.d_hid, args.nlayers, args.dropout)
+        config = TransConfig(ntokens, args.emsize, args.nhead, args.d_hid, args.nlayers, args.dropout, args.use_pos)
         model = TransformerModel(config).to(device)
     else:
         log.info(f"Use YZFormer model")
