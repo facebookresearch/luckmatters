@@ -41,6 +41,7 @@ class YZBlock(nn.Module):
         self.zero_init = args.zero_init
         self.attn_include_base_token = args.attn_include_base_token
         self.residual = args.residual
+        # self.pick_softmax_token = args.pick_softmax_token
 
         # # a global shift of each row of K1/K2 doesn't matter, so move it to zero
         # with torch.no_grad():
@@ -84,14 +85,12 @@ class YZBlock(nn.Module):
             combined = combined / combined.norm(dim=2, keepdim=True)
 
         # What happens to first few tokens? Their predictions are pretty much unstable..
-
         res = self.Y_post(self.Y_pre(combined))
         if self.residual:
             res = res + combined
 
         # Add dropout
-        res = self.dropout(res) 
-
+        # res = self.dropout(res) 
         return res, attns
 
     def normalize(self):
@@ -105,7 +104,15 @@ class YZFormer(nn.Module):
 
         # stack #layers of YZBlock
         self.layers = nn.ModuleList([ YZBlock(self.vocab_size, args) for i in range(args.num_layers) ])
-        self.nonlinearity = nn.ReLU()
+
+        if args.nonlinearity == "relu":
+            self.nonlinearity = nn.ReLU()
+        elif args.nonlinearity == "softmax":
+            self.nonlinearity = nn.Softmax(dim=2)
+        elif args.nonlinearity == "sigmoid":
+            self.nonlinearity = nn.Sigmoid()
+        else:
+            raise RuntimeError(f"Unknown nonlinearity {self.nonlinearity}")
 
         self.seq_first = args.seq_first
 

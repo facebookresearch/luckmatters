@@ -183,12 +183,10 @@ def main(args):
 
     # load overrided configure file. 
     specified_cfg = common_utils.MultiRunUtil.load_cfg("./")
-    specified_cfg = {s.split("=")[0] : s.split("=")[1] for s in specified_cfg}
-    run_name = specified_cfg["run_name"]
-    del specified_cfg["run_name"]
-    del specified_cfg["githash"]
-    del specified_cfg["sweep_filename"]
-    run_name = run_name + "," + ",".join([f"{k}={v}" for k, v in specified_cfg.items()])
+    run_name = ",".join([s for s in specified_cfg.items() if not s.startswith("+")])
+
+    if hasattr(args, "run_name"):
+        run_name = args.run_name + "," + run_name 
 
     run = wandb.init(
         # Set the project where this run will be logged
