@@ -32,6 +32,8 @@ class YZBlock(nn.Module):
         self.Z_pre = nn.Linear(M, self.emsize, bias=False)
         self.Z_post = nn.Linear(self.emsize, M, bias=False)
 
+        self.dropout = nn.Dropout(args.dropout)
+
         # relative positional encoding
         # self.relative_z = torch.zeros(100, required_grad=True)
 
@@ -86,6 +88,9 @@ class YZBlock(nn.Module):
         res = self.Y_post(self.Y_pre(combined))
         if self.residual:
             res = res + combined
+
+        # Add dropout
+        res = self.dropout(res) 
 
         return res, attns
 
