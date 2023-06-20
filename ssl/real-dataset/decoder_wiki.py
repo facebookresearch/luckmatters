@@ -96,7 +96,15 @@ def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0, last_a
     optimizer = torch.optim.SGD([{'params': [temp[1] for temp in params], 'lr': args.lr_z * args.lr_y_multi_on_z}, {'params': [temp[1] for temp in base_params], 'lr': args.lr_z}])
     '''
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.opt.lr)
+    if args.opt.method == "adam":
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.opt.lr)
+    elif args.opt.method == "sgd":
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.opt.lr, momentum=args.opt.momentum)
+    elif args.opt.method == "adamw":
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.opt.lr)
+    else:
+        raise RuntimeError(f"Unknown method {args.opt.method}")
+
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
 
     model.train()  # turn on train mode
@@ -183,7 +191,7 @@ def main(args):
 
     # load overrided configure file. 
     specified_cfg = common_utils.MultiRunUtil.load_cfg("./")
-    run_name = ",".join([s for s in specified_cfg.items() if not s.startswith("+")])
+    run_name = ",".join([s for s in specified_cfg if not s.startswith("+")])
 
     if hasattr(args, "run_name"):
         run_name = args.run_name + "," + run_name 

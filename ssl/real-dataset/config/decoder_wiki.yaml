@@ -43,6 +43,10 @@ yzformer:
   residual: true  
   seq_first: true
   dropout: ${dropout}
+  nonlinearity: relu
+  vocab_add_size: 1000
 
 opt:
+  method: adam # can be adam/sgd/adamw
   lr: 1e-4
+  momentum: 0.9
