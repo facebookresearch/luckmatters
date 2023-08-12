@@ -18,20 +18,19 @@ from torch.nn.modules.linear import Linear
 from torch.nn.modules.normalization import LayerNorm
 
 class YZBlock(nn.Module):
-    def __init__(self, M_input, M_output, args):
+    def __init__(self, M, args):
         super(YZBlock, self).__init__()
-        self.M_input = M_input
-        self.M_output = M_output
+        self.M = M
 
         self.emsize = args.emsize
 
         # top-layer pairwise weight
-        self.Y_pre = nn.Linear(M_input, self.emsize, bias=False)
-        self.Y_post = nn.Linear(self.emsize, M_output, bias=False)
+        self.Y_pre = nn.Linear(M, self.emsize, bias=False)
+        self.Y_post = nn.Linear(self.emsize, M, bias=False)
 
         # attention layer pairwise weight
-        self.Z_pre = nn.Linear(M_input, self.emsize, bias=False)
-        self.Z_post = nn.Linear(self.emsize, M_input, bias=False)
+        self.Z_pre = nn.Linear(M, self.emsize, bias=False)
+        self.Z_post = nn.Linear(self.emsize, M, bias=False)
 
         self.dropout = nn.Dropout(args.dropout)
 
@@ -87,6 +86,8 @@ class YZBlock(nn.Module):
 
         # What happens to first few tokens? Their predictions are pretty much unstable..
         res = self.Y_post(self.Y_pre(combined))
+        if self.residual:
+            res = res + combined
 
         # Add dropout
         # res = self.dropout(res) 
@@ -103,10 +104,8 @@ class YZFormer(nn.Module):
 
         # stack #layers of YZBlock
         layers = []
-        curr_M = self.vocab_size
         for i in range(args.num_layers):
-            layers.append(YZBlock(curr_M, args.vocab_add_size, args))
-            curr_M += args.vocab_add_size
+            layers.append(YZBlock(self.vocab_size, args))
 
         self.layers = nn.ModuleList(layers)
 
@@ -133,13 +132,14 @@ class YZFormer(nn.Module):
 
         all_attns = []
 
-        for layer in self.layers:
-            # normalize first.
-            X_append, attns = layer(X, src_mask)
+        for i, layer in enumerate(self.layers):
+            X, attns = layer(X, src_mask)
             all_attns.append(attns)
-            X_append = self.nonlinearity(X_append)
-            X = torch.cat([X, X_append], dim=2)
-            X = X / X.norm(dim=2, keepdim=True) 
+
+            if i < len(self.layers) - 1: 
+                X = self.nonlinearity(X)
+                # X = torch.cat([X, X_append], dim=2)
+                X = X / X.norm(dim=2, keepdim=True) 
         
         # [batchsize, seq_length, num_tokens]
         if self.seq_first:
