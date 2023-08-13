@@ -1,3 +1,4 @@
+from collections import Counter
 from copy import deepcopy
 import itertools
 import torch
@@ -91,13 +92,13 @@ class SABlock(nn.Module):
 
         # apply layer norm
         output = self.ln(output) 
-
-        output2 = self.w2(self.gate_func(self.w1(output)))
+        hidden = self.gate_func(self.w1(output))
+        output2 = self.w2(hidden)
         output2 = output2 + output
         # apply layer norm
         output2 = self.ln2(output2) 
 
-        return output2
+        return output2, hidden
     
 
 class Model(nn.Module):
@@ -114,10 +115,9 @@ class Model(nn.Module):
             [ SABlock(d, H, gate) for l in range(nlayer) ]
         )
 
-        self.loss_func = torch.nn.CrossEntropyLoss() 
         self.d = d
         
-    def forward(self, x, label, src_mask):
+    def forward(self, x, src_mask):
         # x is size (bs, L) of type LongTensor, L is the length of the seq
         x_input = x.clone()
 
@@ -125,17 +125,19 @@ class Model(nn.Module):
         output = self.embed(x_input) 
 
         # of size [bs, L, d]
+        hiddens = []
         for b in self.blocks:
-            output = b(output, src_mask)
+            output, hidden = b(output, src_mask)
+            hiddens.append(hidden)
 
         v = output[:,-1,:].squeeze()
-        logits = self.final_W(v)
+        return self.final_W(v), hiddens
         # simple loss (now with softmax alpha it works)
         # with torch.no_grad():
         #     alpha = F.softmax(logits, dim=1)
         # alpha = torch.ones_like(logits) / logits.size(1)
         # return -(logits.gather(1, label.unsqueeze(1)).squeeze(1) - (logits * alpha).sum(dim=1)).mean()
-        return self.loss_func(logits, label)
+        # return self.loss_func(logits, label)
 
     def normalize(self):
         # Normalize the embedding (should be realized by layernorm)
@@ -172,6 +174,8 @@ class Dataset:
         # The last token is used as a padding token. 
         last_layer_num_tokens = M - 1
 
+        cnts = []
+
         for l in range(num_layer):
             # picks a random combination of l-th layer token to obtain the (l+1)-th layer token. 
             # simple reject sampling
@@ -192,12 +196,20 @@ class Dataset:
                     
                 hier_tokens[l].append(combination)
 
+            # how many times a lower level token is used?
+            cnts.append(Counter())
+            for a in hier_tokens[l]:
+                for aa in a:
+                    cnts[-1][aa] += 1
+
+            # print(f"Layer {l}: {cnt.most_common(100)}")
             last_layer_num_tokens = num_tokens[l]
 
         self.num_layer = num_layer
         self.num_tokens = num_tokens
         self.num_combinations = num_combinations
         self.hier_tokens = hier_tokens
+        self.cnts = cnts
 
         self.L = L
         self.M = M
@@ -206,10 +218,13 @@ class Dataset:
         x = torch.LongTensor(batchsize, self.L).fill_(self.M - 1)
         label = torch.randint(0, self.num_tokens[-1], (batchsize,))
 
+        activated_vars = [ [None for i in range(self.num_layer)] for _ in range(batchsize) ]
+
         # top down generation:  
         for i in range(batchsize):
             curr_hidden_ids = set([label[i].item()]) 
             for l in reversed(range(self.num_layer)):
+                activated_vars[i][l] = curr_hidden_ids
                 # get all activated hidden variables. 
                 curr_hidden_ids = set().union(*[ self.hier_tokens[l][k] for k in curr_hidden_ids ])
 
@@ -221,7 +236,13 @@ class Dataset:
             # pre-padding to make the prediction easier.  
             x[i,-len(curr_hidden_ids):] = torch.LongTensor(list(curr_hidden_ids))
 
-        return x, label
+        return x, label, activated_vars 
+
+def compute_corr(x, y):
+    x_norm = x.norm(dim=0) + 1e-9 
+    y_norm = y.norm(dim=0) + 1e-9
+    corrs = x.t() @ y / x_norm[:,None] / y_norm[None,:] 
+    return corrs
                 
 
 @hydra.main(config_path="config", config_name="decoder_only_hier.yaml", version_base="1.1")
@@ -234,6 +255,8 @@ def main(args):
 
     model = model.cuda()
     model.train()
+
+    loss_func = torch.nn.CrossEntropyLoss().cuda() 
 
     if args.opt.method == "adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=args.opt.lr, weight_decay=args.opt.wd)
@@ -252,11 +275,12 @@ def main(args):
         if t % args.save_per_minibatch == 0:
             torch.save(dict(model=model.state_dict()), f"iter-{t}.pth")
 
-        x, label = dataset.generate(args.batchsize)
+        x, label, _ = dataset.generate(args.batchsize)
         x = x.cuda()
         label = label.cuda()
 
-        loss = model(x, label, src_mask)
+        pred, _ = model(x, src_mask)
+        loss = loss_func(pred, label)
 
         if t % args.save_per_minibatch == 0:
             log.info(f"[{t}] loss: {loss.detach().cpu().item()}")
@@ -279,6 +303,39 @@ def main(args):
         '''
 
         model.normalize()
+
+    # Then let's measure correlation between FFN hidden nodes and activated hidden variables
+    test_batchsize = 12800
+    x, label, activated_vars = dataset.generate(test_batchsize)
+    x = x.cuda()
+    label = label.cuda()
+    with torch.no_grad():
+        pred, hiddens = model(x, src_mask)
+
+    # coarse-level, bottom to top 
+    gts_activated = [ torch.zeros(test_batchsize, num_latent_token).cuda() for num_latent_token in dataset.num_tokens ]
+
+    for i, s in enumerate(activated_vars):
+        # from bottom to top
+        for l, activated_set_per_layer in enumerate(s):
+            for activated_v in activated_set_per_layer:
+                # get the location by finding the latest token
+                # dataset.hier_tokens[l][activated_v][-1]
+                gts_activated[l][i,activated_v] = 1
+
+    # Then check the correlation. 
+    for l, gt_activated in enumerate(gts_activated):
+        # Do a max pool
+        hidden, _ = hiddens[l].max(dim=1)
+        # compute correlation [#latents, #hidden] 
+        corrs = compute_corr(gt_activated, hidden)
+        max_corrs, _ = corrs.max(dim=1) 
+        sorted_max_corr, sorted_indices = max_corrs.sort(descending=True)
+        print(f"Layer {l}: {sorted_max_corr}")
+        if l < len(gts_activated) - 1: 
+            print("\n".join([ f"Layer {l} / latent {ind}: cnt: {dataset.cnts[l+1][ind.item()]}, corr: {max_corrs[ind]}" for ind in sorted_indices ]))
+
+    # Then compare activated_vars and hiddens
 
     # log.info("Embedding K:")
     # log.info(model.K.weight)
