@@ -1,0 +1,34 @@
+M: 20
+L: 20
+num_class: 10
+seed: 1
+
+niter: 1000
+batchsize: 128
+save_per_minibatch: 100
+
+model:
+  _target_: decoder_only_hier.Model
+  M: ${M}
+  nlayer: 2
+  d: 64
+  H: 1
+  num_output: ${num_class}
+  gate: relu
+  normalize_embed_shift: false
+  normalize_embed_scale: none
+
+gen:
+  _target_: decoder_only_hier.Dataset
+  L: ${L}
+  M: ${M}
+  num_tokens: [20, null]
+  # Each top layer class contains a random #combinations of #bottom layer tokens. 
+  num_combinations: [3, 3]
+  num_class: ${num_class}
+
+opt:
+  method: "sgd"
+  lr: 0.01
+  wd: 5e-3
+  momentum: 0.9
