@@ -14,10 +14,11 @@ import os
 import logging
 log = logging.getLogger(__file__)
 
+from decoder_wiki_yz3 import YZFormer
+
 def generate_square_subsequent_mask(sz: int) -> torch.Tensor:
     """Generates an upper-triangular matrix of ``-inf``, with zeros on ``diag``."""
     return torch.triu(torch.ones(sz, sz) * float('-inf'), diagonal=1)
-
 
 class SABlock(nn.Module):
     def __init__(self, d, H, gate = "relu"):
@@ -130,8 +131,7 @@ class Model(nn.Module):
             output, hidden = b(output, src_mask)
             hiddens.append(hidden)
 
-        v = output[:,-1,:].squeeze()
-        return self.final_W(v), hiddens
+        return self.final_W(output), hiddens, None
         # simple loss (now with softmax alpha it works)
         # with torch.no_grad():
         #     alpha = F.softmax(logits, dim=1)
@@ -238,11 +238,22 @@ class Dataset:
 
         return x, label, activated_vars 
 
-def compute_corr(x, y):
+def compute_corr(x, y, zero_mean=False):
+    if zero_mean:
+        x = x - x.mean(dim=0, keepdim=True)
+        y = y - y.mean(dim=0, keepdim=True)
     x_norm = x.norm(dim=0) + 1e-9 
     y_norm = y.norm(dim=0) + 1e-9
     corrs = x.t() @ y / x_norm[:,None] / y_norm[None,:] 
     return corrs
+
+def print_corr(dataset, l, corrs):
+    max_corrs, _ = corrs.max(dim=1) 
+    sorted_max_corr, sorted_indices = max_corrs.sort(descending=True)
+    log.info(f"Layer {l}: {sorted_max_corr}")
+    if l < len(dataset.cnts) - 1:
+        log.info("\n".join([ f"Layer {l} / latent {ind}: cnt: {dataset.cnts[l+1][ind.item()]}, corr: {max_corrs[ind]}" for ind in sorted_indices ]))
+
                 
 
 @hydra.main(config_path="config", config_name="decoder_only_hier.yaml", version_base="1.1")
@@ -251,7 +262,13 @@ def main(args):
     common_utils.set_all_seeds(args.seed)
 
     dataset = hydra.utils.instantiate(args.gen)
-    model = hydra.utils.instantiate(args.model)
+
+    if args.use_model == "embedding":
+        model = hydra.utils.instantiate(args.model)
+    elif args.use_model == "yz":
+        model = hydra.utils.instantiate(args.model2)
+    else:
+        raise RuntimeError(f"unknown model {args.use_model}")
 
     model = model.cuda()
     model.train()
@@ -279,7 +296,8 @@ def main(args):
         x = x.cuda()
         label = label.cuda()
 
-        pred, _ = model(x, src_mask)
+        pred, _, _ = model(x, src_mask)
+        pred = pred[:,-1,:].squeeze()
         loss = loss_func(pred, label)
 
         if t % args.save_per_minibatch == 0:
@@ -305,12 +323,13 @@ def main(args):
         model.normalize()
 
     # Then let's measure correlation between FFN hidden nodes and activated hidden variables
-    test_batchsize = 12800
+    test_batchsize = 1280
     x, label, activated_vars = dataset.generate(test_batchsize)
     x = x.cuda()
     label = label.cuda()
     with torch.no_grad():
-        pred, hiddens = model(x, src_mask)
+        pred, hiddens, _ = model(x, src_mask)
+        pred = pred[:,-1,:].squeeze()
 
     # coarse-level, bottom to top 
     gts_activated = [ torch.zeros(test_batchsize, num_latent_token).cuda() for num_latent_token in dataset.num_tokens ]
@@ -324,16 +343,23 @@ def main(args):
                 gts_activated[l][i,activated_v] = 1
 
     # Then check the correlation. 
+    all_corrs_zero_mean = []
+    all_corrs_nonzero_mean = []
     for l, gt_activated in enumerate(gts_activated):
         # Do a max pool
         hidden, _ = hiddens[l].max(dim=1)
         # compute correlation [#latents, #hidden] 
-        corrs = compute_corr(gt_activated, hidden)
-        max_corrs, _ = corrs.max(dim=1) 
-        sorted_max_corr, sorted_indices = max_corrs.sort(descending=True)
-        print(f"Layer {l}: {sorted_max_corr}")
-        if l < len(gts_activated) - 1: 
-            print("\n".join([ f"Layer {l} / latent {ind}: cnt: {dataset.cnts[l+1][ind.item()]}, corr: {max_corrs[ind]}" for ind in sorted_indices ]))
+        zero_mean_corrs = compute_corr(gt_activated, hidden, zero_mean=True)
+        non_zero_mean_corrs = compute_corr(gt_activated, hidden, zero_mean=False)
+
+        all_corrs_nonzero_mean.append(non_zero_mean_corrs)
+        all_corrs_zero_mean.append(zero_mean_corrs)
+
+        log.info("Zero mean corrs:")
+        print_corr(dataset, l, zero_mean_corrs)
+
+        log.info("Non-zero mean corrs:")
+        print_corr(dataset, l, non_zero_mean_corrs)
 
     # Then compare activated_vars and hiddens
 
@@ -348,7 +374,7 @@ def main(args):
     # pdb.set_trace()
 
     # torch.save(dict(model=model.state_dict(), model_linear=model_linear.state_dict()), "final.pth")
-    torch.save(dict(model=model.state_dict()), "final.pth")
+    torch.save(dict(model=model.state_dict(), all_corrs_nonzero_mean=all_corrs_nonzero_mean, all_corrs_zero_mean=all_corrs_zero_mean), "final.pth")
 
     log.info(os.getcwd())
 

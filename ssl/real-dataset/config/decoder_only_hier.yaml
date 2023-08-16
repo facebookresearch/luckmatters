@@ -7,9 +7,11 @@ niter: 1000
 batchsize: 128
 save_per_minibatch: 100
 
+use_model: "embedding"
+
 model:
   _target_: decoder_only_hier.Model
-  M: ${M}
+  M: ${..M}
   nlayer: 2
   d: 64
   H: 1
@@ -17,6 +19,13 @@ model:
   gate: relu
   normalize_embed_shift: false
   normalize_embed_scale: none
+
+model2:
+  _target_: decoder_only_hier.YZFormer
+  M: ${..M}
+  additional_vocabs: [40, null]
+  num_output: ${num_class}
+  gate: relu 
 
 gen:
   _target_: decoder_only_hier.Dataset
