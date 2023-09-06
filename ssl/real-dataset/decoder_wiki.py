@@ -95,6 +95,7 @@ def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0, last_a
 
     optimizer = torch.optim.SGD([{'params': [temp[1] for temp in params], 'lr': args.lr_z * args.lr_y_multi_on_z}, {'params': [temp[1] for temp in base_params], 'lr': args.lr_z}])
     '''
+    log.info(f"Warning! args.lr_z = {args.lr_z} and args.lr_y_multi_on_z = {args.lr_y_multi_on_z} are not used. Instead we use args.opt.lr = {args.opt.lr}")
 
     if args.opt.method == "adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=args.opt.lr)
@@ -311,11 +312,11 @@ def main(args):
         collections.append(dict(iter_num=iter_num, filename=filename, val_loss=val_loss, val_ppl=val_ppl, attn=attn, attn_entropy=attn_entropy))
 
     if args.eval_last:
-        pickle.dump(collections, open("collections_last.pkl", "wb"))
+        torch.save(collections, "collections_last.pt")
     elif args.eval_models is not None:
-        pickle.dump(collections, open("collections_eval_models.pkl", "wb"))
+        torch.save(collections, "collections_eval_models.pt")
     else:
-        pickle.dump(collections, open("collections.pkl", "wb"))
+        torch.save(collections, "collections.pt")
         
     log.info(os.getcwd())
 

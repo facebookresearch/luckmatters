@@ -21,7 +21,7 @@ def generate_square_subsequent_mask(sz: int) -> torch.Tensor:
     return torch.triu(torch.ones(sz, sz) * float('-inf'), diagonal=1)
 
 class SABlock(nn.Module):
-    def __init__(self, d, H, gate = "relu"):
+    def __init__(self, d, d_hidden, H, gate = "relu"):
         super(SABlock, self).__init__()
 
         self.gate = "relu"
@@ -35,8 +35,8 @@ class SABlock(nn.Module):
         self.Wq = nn.Linear(d, d, bias=False)
         self.Wv = nn.Linear(d, d, bias=False)
 
-        self.w1 = nn.Linear(d, 4*d)
-        self.w2 = nn.Linear(4*d, d)
+        self.w1 = nn.Linear(d, d_hidden)
+        self.w2 = nn.Linear(d_hidden, d)
         if self.gate == "relu":
             self.gate_func = nn.ReLU()
         elif self.gate == "silu":
@@ -103,17 +103,30 @@ class SABlock(nn.Module):
     
 
 class Model(nn.Module):
-    def __init__(self, M, nlayer, d, H, num_output, gate, normalize_embed_shift=False, normalize_embed_scale=False):
+    def __init__(self, M, nlayer, d, H, num_output, gate, hidden_multi_type="d", hidden_multi=4, normalize_embed_shift=False, normalize_embed_scale=False):
         super(Model, self).__init__()
         self.M = M
+
+        if hidden_multi_type == "d":
+            d_hidden = hidden_multi * d
+        elif hidden_multi_type == "M":
+            d_hidden = hidden_multi * M
+        else:
+            raise RuntimeError(f"Unknown hidden_multi_type {hidden_multi_type}")
+
         self.embed = nn.Embedding(M, d) # max_norm=1)
+
+        # orthogonal_frozen_embed=False, 
+        # if orthogonal_frozen_embed:
+        #     assert d > M, f"If we want to "
+
         self.final_W = nn.Linear(d, num_output)
 
         self.normalize_embed_shift = normalize_embed_shift
         self.normalize_embed_scale = normalize_embed_scale
 
         self.blocks = nn.ModuleList(
-            [ SABlock(d, H, gate) for l in range(nlayer) ]
+            [ SABlock(d, d_hidden, H, gate) for l in range(nlayer) ]
         )
 
         self.d = d
