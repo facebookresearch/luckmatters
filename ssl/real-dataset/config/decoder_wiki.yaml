@@ -23,7 +23,8 @@ lr_y_multi_on_z: 1
 lr_z: 1
 
 log_interval: 100
-save_interval: 1000
+save_interval: 10000
+stats_interval: 2500
 
 dataset: wikitext2
 

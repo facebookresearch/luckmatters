@@ -68,7 +68,7 @@ def get_batch(source: Tensor, i: int, bptt) -> Tuple[Tensor, Tensor]:
     target = source[i+1:i+1+seq_len].reshape(-1)
     return data, target
 
-def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0, last_accu_loss=0) -> None:
+def train(train_data : Tensor, val_data : Tensor, src_mask, model: nn.Module, args, collections, epoch=0, last_accu_loss=0) -> None:
     criterion = nn.CrossEntropyLoss()
 
     '''
@@ -137,6 +137,12 @@ def train(train_data : Tensor, src_mask, model: nn.Module, args, epoch=0, last_a
             best_model_params_path = f'model_medium_iter_{total_batch_cnt}.pt'
             torch.save(model.state_dict(), best_model_params_path)
 
+        if total_batch_cnt % args.stats_interval == 0:
+            log.info(f"{total_batch_cnt}: Compute and save stats ...")
+            stats = get_model_stats(total_batch_cnt, val_data, src_mask, model, args)
+            collections.append(stats)
+            model.train()
+
         data, targets = get_batch(train_data, i, args.bptt)
         seq_len = data.size(0)
         if seq_len != args.bptt:  # only on last batch
@@ -184,6 +190,24 @@ def evaluate(eval_data : Tensor, src_mask, model: nn.Module, args) -> float:
                 return_seq = data[:,batch_idx]            
     return total_loss / (len(eval_data) - 1), return_attn, return_seq, attn_entropy
 
+def get_model_stats(train_batch_cnt, val_data, src_mask, model : nn.Module, args, vocab = None):
+    val_loss, attn, seq, attn_entropy = evaluate(val_data, src_mask, model, args)
+
+    if vocab is not None:
+        seq = vocab.lookup_tokens(seq.tolist())
+        log.info(seq)
+
+    val_ppl = math.exp(val_loss)
+
+    log.info(f"val_loss: {val_loss}, val_ppl: {val_ppl}")
+
+    wandb.log({ 
+        "train/step" : train_batch_cnt,
+        "val/loss": val_loss, 
+        "val/ppl": val_ppl
+    })
+
+    return dict(iter_num=train_batch_cnt, val_loss=val_loss, val_ppl=val_ppl, attn=attn, attn_entropy=attn_entropy)
 
 @hydra.main(config_path="config", config_name="decoder_wiki.yaml", version_base="1.1.1")
 def main(args):
@@ -269,47 +293,30 @@ def main(args):
 
     src_mask = generate_square_subsequent_mask(args.bptt).to(device)
 
+    collections = []
+
     if not args.eval_only:
         last_accu_loss = 0
         for epoch in range(1, args.num_epoch + 1):
-            last_accu_loss = train(train_data, src_mask, model, args, epoch=epoch, last_accu_loss=last_accu_loss)
+            last_accu_loss = train(train_data, val_data, src_mask, model, args, collections, epoch=epoch, last_accu_loss=last_accu_loss)
+    else:
+        # Get validation loss + example attention.
+        # arrange them in a time order.
+        filenames = glob.glob(args.eval_models or "*.pt")
+        filenames.sort(key=os.path.getmtime)
 
-    collections = []
-    
-    # Get validation loss + example attention.
-    # arrange them in a time order.
+        if args.eval_last:
+            filenames = [filenames[-1]]
+        
+        for filename in filenames:
+            log.info(filename)
+            model.load_state_dict(torch.load(filename))
 
-    filenames = glob.glob(args.eval_models or "*.pt")
-    filenames.sort(key=os.path.getmtime)
+            name, _ = os.path.splitext(filename)
+            train_batch_cnt = int(name[name.rfind("_") + 1]) 
 
-    if args.eval_last:
-        filenames = [filenames[-1]]
-    
-    for filename in filenames:
-        log.info(filename)
-        model.load_state_dict(torch.load(filename))
-        val_loss, attn, seq, attn_entropy = evaluate(val_data, src_mask, model, args)
-
-        seq = vocab.lookup_tokens(seq.tolist())
-        log.info(seq)
-
-        val_ppl = math.exp(val_loss)
-
-        log.info(f"val_loss: {val_loss}, val_ppl: {val_ppl}")
-
-        name, _ = os.path.splitext(filename)
-        train_batch_cnt = int(name[name.rfind("_") + 1]) 
-
-        wandb.log({ 
-            "train/step" : train_batch_cnt,
-            "val/loss": val_loss, 
-            "val/ppl": val_ppl
-        })
-
-        # Iter
-        no_ext, _ = os.path.splitext(filename)
-        iter_num = int(no_ext[no_ext.rfind("_")+1:])
-        collections.append(dict(iter_num=iter_num, filename=filename, val_loss=val_loss, val_ppl=val_ppl, attn=attn, attn_entropy=attn_entropy))
+            stats = get_model_stats(train_batch_cnt, val_data, src_mask, model, args, vocab)
+            collections.append(stats)
 
     if args.eval_last:
         torch.save(collections, "collections_last.pt")
