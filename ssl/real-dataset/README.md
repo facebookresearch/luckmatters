@@ -11,7 +11,7 @@ Please install `common_utils` package in https://github.com/yuandong-tian/tools2
 
 # Sample Usage 
 
-## First paper [1]
+## Double Deep Network (DDN) [1]
 To run verification of Theorem 4 in [1]:
 
 ```
@@ -24,7 +24,7 @@ You can also set `trainer.nce_loss.exact_cov=false` to get performance when usin
 
 For Hierarchical Latent Tree Model (HLTM) in Section 6, please check the code [here](https://github.com/facebookresearch/luckmatters/tree/master/ssl/hltm).
 
-## Second paper [2]
+## DirectPred [2]
 To run DirectPred introduced in [2], here is a sample command (tested in commit cb23d10c3018df6bf275ad537f23675c8a627253) 
 
 ```
@@ -36,13 +36,13 @@ Note that
 1. The second line `trainer.predictor_params.normalization=no_normalization` and `network.predictor_head.mlp_hidden_size=null` means that the predictor is linear.  
 2. The third line means that we use DirectPredict with update frequency `freq=1`, `dyn_lambda=0.3` (which is `rho` in Eqn. 19 of [2]) and `dyn_eps=0.01` (which is `eps` in Eqn. 18 of [2]).  
 
-## Third paper [3] 
+## alpha-CL [3] 
 To run alpha-CL (with `p=4` in the paper), here is a sample command
 ```
 python main.py method=simclr dataset=cifar100 trainer.nce_loss.loss_type=dual2 trainer.nce_loss.alpha_exponent=2 trainer.nce_loss.alpha_eps=0 trainer.nce_loss.alpha_type=exp use_optimizer=adam optimizer.params.lr=0.01 optimizer.params.weight_decay=0 seed=1
 ```
 
-## Fourth paper [4]
+## alpha-CL with nonlinearity [4]
 To run the experiments in Section 5, try the following. Here `distri.num_tokens_per_pos` is `P`, and `distri.pattern_cnt` is `G` in the paper. 
 
 ```
@@ -132,6 +132,10 @@ At loc 9: O=5,D=4,J=5,T=5,P=4
 [2022-09-02 15:59:11,052][bn_gen.py][INFO] - [{'folder': '/private/home/yuandong/luckmatters/ssl/real-dataset/outputs/2022-09-02/15-56-05', 'loc0': 0.9961947202682495, 'loc_other0': 0.005383226554840803, 'loc1': 0.9986963272094727, 'loc_other1': -0.00016310946375597268, 'loc2': 0.9985083341598511, 'loc_other2': -0.0002446844591759145, 'loc3': 0.9983118772506714, 'loc_other3': -0.0002287515817442909, 'loc4': 0.9983332753181458, 'loc_other4': -0.0002713123394642025, 'loc5': 0.9984112977981567, 'loc_other5': -0.00028966396348550916, 'loc6': 0.9983190298080444, 'loc_other6': -0.0002980256685987115, 'loc7': 0.9980360269546509, 'loc_other7': -0.00040157922194339335, 'loc8': 0.9986146092414856, 'loc_other8': -0.00030036718817427754, 'loc9': 0.9987049102783203, 'loc_other9': 0.023116284981369972, 'loc_all': 0.9982131123542786, 'loc_other_all': 0.002630201866850257}]
 ```
 
+## Scan & Snap [5]
+
+## JoMA [6]
+
 # Reference
 [1] **Understanding Self-supervised Learning with Dual Deep Networks** 
 
@@ -155,7 +159,20 @@ Yuandong Tian
 
 Yuandong Tian
 
-[arXiv](https://arxiv.org/abs/2206.01342)
+[ICLR'23](https://arxiv.org/abs/2206.01342)
+
+[5] **Scan and Snap: Understanding Training Dynamics and Token Composition in 1-layer Transformer**
+
+Yuandong Tian, Yiping Wang, Beidi Chen, Simon Du
+
+[NeurIPS'23](https://arxiv.org/abs/2305.16380)
+
+[6] **JoMA: Demystifying Multilayer Transformers via JOint Dynamics of MLP and Attention**
+
+Yuandong Tian, Yiping Wang, Zhenyu Zhang, Beidi Chen, Simon Du
+
+[ICLR'24](https://arxiv.org/abs/2310.00535)
+
 
 
 
