@@ -1,6 +1,6 @@
 This repo contains the code of the following 8 papers:
 
-## Analysis of Transformer training dynamics 
+## Analysis of Transformer training dynamics (`./ssl/real-dataset`)
 **Scan and Snap: Understanding Training Dynamics and Token Composition in 1-layer Transformer**
 
 Yuandong Tian, Yiping Wang, Beidi Chen, Simon Du
