@@ -1,0 +1,3 @@
+decoder_wiki.py -m opt.lr=1e-2,1e-3,1e-4 seed=1,2,3 num_epoch=5 nlayers=1,2,3,4,5,8,10 dataset=wikitext103 use_baseline=True save_interval=50000
+
+24719010a19999945acce05f47a46314d0d9927d
