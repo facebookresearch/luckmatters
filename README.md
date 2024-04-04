@@ -1,11 +1,25 @@
-This repo contains the code of the following 6 papers:
+This repo contains the code of the following 8 papers:
+
+## Analysis of Transformer training dynamics 
+**Scan and Snap: Understanding Training Dynamics and Token Composition in 1-layer Transformer**
+
+Yuandong Tian, Yiping Wang, Beidi Chen, Simon Du
+
+[NeurIPS'23](https://arxiv.org/abs/2305.16380)
+
+**JoMA: Demystifying Multilayer Transformers via JOint Dynamics of MLP and Attention**
+
+Yuandong Tian, Yiping Wang, Zhenyu Zhang, Beidi Chen, Simon Du
+
+[ICLR'24](https://arxiv.org/abs/2310.00535)
+
 
 ## Analysis of Self-supervised learning (`./ssl`) 
 **Understanding the Role of Nonlinearity in Training Dynamics of Contrastive Learning**
 
 Yuandong Tian
 
-[arXiv](https://arxiv.org/abs/2206.01342)
+[ICLR'23](https://arxiv.org/abs/2206.01342)
 
 **Understanding Deep Contrastive Learning via Coordinate-wise Optimization**
 
