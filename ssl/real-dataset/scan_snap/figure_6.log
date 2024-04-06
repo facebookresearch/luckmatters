@@ -1,0 +1,220 @@
+[2023-05-16 16:06:05,573][decoder_only.py][INFO] - 
+===*** Job start ***===
+Command line:
+    
+decoder_only.py \
+  -m \
+  d=128 \
+  L=128 \
+  H=1 \
+  niter=100 \
+  save_per_minibatch=2 \
+  opt.wd=0 \
+  batchsize=128 \
+  seed=1,2,3,4,5,6,7,8,9,10 \
+  model2.normalize=true \
+  opt.method=sgd \
+  model2.residual=false \
+  dataset2.num_last=1,3,5,10 \
+  dataset2.num_common_per_last=0 \
+  opt.lr_z=0.5,1,2,3 \
+  opt.lr_y_multi_on_z=1,2,5,10 \
+  model2.zero_init=false \
+
+    
+Working dir: /private/home/yuandong/luckmatters/ssl/real-dataset/multirun/2023-05-16/16-05-12/0
+400c7ca9e8bde9092cf37dcce615b1a2b51ff4fd
+diff --git a/ssl/real-dataset/check_sweep.sh b/ssl/real-dataset/check_sweep.sh
+index c2b38af..525ba37 100644
+--- a/ssl/real-dataset/check_sweep.sh
++++ b/ssl/real-dataset/check_sweep.sh
+@@ -6,7 +6,7 @@ run_analysis=$1
+ shift
+ 
+ if [ "$run_analysis" -eq "1" ]; then
+-  python ~/tools2/analyze.py $logdir --num_process 32 
++  python ~/tools2/analyze.py $logdir --num_process 1 
+ fi
+ 
+ echo python ~/tools2/stats.py $logdir 
+diff --git a/ssl/real-dataset/config/decoder_only.yaml b/ssl/real-dataset/config/decoder_only.yaml
+index 76b78b0..ba6b871 100644
+--- a/ssl/real-dataset/config/decoder_only.yaml
++++ b/ssl/real-dataset/config/decoder_only.yaml
+@@ -66,5 +66,8 @@ model2:
+ opt:
+   method: "adam"
+   lr: 0.1
++  lr_y: none,
++  lr_y_multi_on_z: none
++  lr_z: none,
+   momentum: 0.9
+-  wd: 5e-4
+\ No newline at end of file
++  wd: 0
+\ No newline at end of file
+diff --git a/ssl/real-dataset/decoder_only.py b/ssl/real-dataset/decoder_only.py
+index 41460f6..a73286c 100644
+--- a/ssl/real-dataset/decoder_only.py
++++ b/ssl/real-dataset/decoder_only.py
+@@ -491,10 +491,27 @@ def main(args):
+     model = model.cuda()
+     model.train()
+ 
++    if args.opt.lr_z is not None:
++        lr_z = args.opt.lr_z
++    else:
++        lr_z = args.opt.lr 
++
++    if args.opt.lr_y_multi_on_z is not None:
++        lr_y = lr_z * args.opt.lr_y_multi_on_z
++    elif args.opt.lr_y is not None:
++        lr_y = args.opt.lr_y
++    else:
++        lr_y = args.opt.lr
++
++    log.info(f"lr y = {lr_y}, lr z = {lr_z}")
++
+     if args.opt.method == "adam":
+-        optimizer = torch.optim.Adam(model.parameters(), lr=args.opt.lr, weight_decay=args.opt.wd)
++        optimizer_y = torch.optim.Adam([model.K1.weight], lr=lr_y, weight_decay=args.opt.wd)
++        optimizer_z = torch.optim.Adam([model.K2.weight], lr=lr_z, weight_decay=args.opt.wd)
+     elif args.opt.method == "sgd":
+-        optimizer = torch.optim.SGD(model.parameters(), lr=args.opt.lr, momentum=args.opt.momentum, weight_decay=args.opt.wd)
++        # optimizer = torch.optim.SGD(model.parameters(), lr=args.opt.lr, momentum=args.opt.momentum, weight_decay=args.opt.wd)
++        optimizer_y = torch.optim.SGD([model.K1.weight], lr=lr_y, momentum=args.opt.momentum, weight_decay=args.opt.wd)
++        optimizer_z = torch.optim.SGD([model.K2.weight], lr=lr_z, momentum=args.opt.momentum, weight_decay=args.opt.wd)
+     else:
+         raise RuntimeError(f"unknown method {args.opt.method}")
+ 
+@@ -502,7 +519,8 @@ def main(args):
+     # optimizer_linear = torch.optim.SGD(model_linear.parameters(), lr=args.opt.lr, momentum=args.opt.momentum, weight_decay=args.opt.wd)
+ 
+     for t in range(args.niter):
+-        optimizer.zero_grad()
++        optimizer_y.zero_grad()
++        optimizer_z.zero_grad()
+ 
+         if t % args.save_per_minibatch == 0:
+             torch.save(dict(model=model.state_dict()), f"iter-{t}.pth")
+@@ -517,7 +535,8 @@ def main(args):
+             log.info(f"[{t}] loss: {loss.detach().cpu().item()}")
+ 
+         loss.backward()
+-        optimizer.step()
++        optimizer_y.step()
++        optimizer_z.step()
+ 
+         '''
+         if t % 1000 == 0:
+
+
+niter: 100
+seed: 1
+L: 128
+M: 24
+d: 128
+H: 1
+dataset2:
+  num_last: 1
+  num_next_per_last: 2
+  num_common: 10
+  num_common_per_last: 0
+  num_unique_per_next: 10
+  common_unnormalized_prob: 1
+  unique_unnormalized_min: 0.1
+  unique_unnormalized_max: 1
+dataset:
+  num_groups: 5
+  num_facts_per_group: 4
+batchsize: 128
+save_per_minibatch: 2
+model:
+  nlayer: 1
+  use_Wk: true
+  use_Wq: true
+  use_Wv: true
+  use_ffn: false
+  use_residue: true
+  use_ln: false
+  gate: relu
+  universal_Wv: false
+  universal_WkWq: false
+  normalize_embed_shift: false
+  normalize_embed_scale: none
+  use_random_grad: false
+model2:
+  attn_include_base_token: false
+  zero_init: false
+  normalize: true
+  residual: false
+opt:
+  method: sgd
+  lr: 0.1
+  lr_y: none,
+  lr_y_multi_on_z: 1
+  lr_z: 0.5
+  momentum: 0.9
+  wd: 0
+
+
+[2023-05-16 16:06:05,582][decoder_only.py][INFO] - Generated 2 facts: 
+[2023-05-16 16:06:05,582][decoder_only.py][INFO] - [{'probs': tensor([0.0645, 0.0645, 0.0645, 0.0645, 0.0645, 0.0645, 0.0645, 0.0645, 0.0645,
+        0.0645, 0.0065, 0.0129, 0.0194, 0.0258, 0.0323, 0.0387, 0.0452, 0.0516,
+        0.0581, 0.0645]), 'tokens': tensor([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17,
+        18, 19]), 'common_per_last_range': (10, 10), 'unique_range': (10, 20), 'last_token': 30, 'next_token': 31}, {'probs': tensor([0.0645, 0.0645, 0.0645, 0.0645, 0.0645, 0.0645, 0.0645, 0.0645, 0.0645,
+        0.0645, 0.0065, 0.0129, 0.0194, 0.0258, 0.0323, 0.0387, 0.0452, 0.0516,
+        0.0581, 0.0645]), 'tokens': tensor([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 20, 21, 22, 23, 24, 25, 26, 27,
+        28, 29]), 'common_per_last_range': (10, 10), 'unique_range': (20, 30), 'last_token': 30, 'next_token': 32}]
+[2023-05-16 16:06:07,615][decoder_only.py][INFO] - lr y = 0.5, lr z = 0.5
+[2023-05-16 16:06:07,628][decoder_only.py][INFO] - [0] loss: 3.4548568725585938
+[2023-05-16 16:06:07,646][decoder_only.py][INFO] - [2] loss: 2.876297950744629
+[2023-05-16 16:06:07,663][decoder_only.py][INFO] - [4] loss: 1.758272409439087
+[2023-05-16 16:06:07,679][decoder_only.py][INFO] - [6] loss: 0.7731755375862122
+[2023-05-16 16:06:07,696][decoder_only.py][INFO] - [8] loss: 0.33556169271469116
+[2023-05-16 16:06:07,713][decoder_only.py][INFO] - [10] loss: 0.16166242957115173
+[2023-05-16 16:06:07,729][decoder_only.py][INFO] - [12] loss: 0.07722064852714539
+[2023-05-16 16:06:07,746][decoder_only.py][INFO] - [14] loss: 0.03298971801996231
+[2023-05-16 16:06:07,762][decoder_only.py][INFO] - [16] loss: 0.01607906073331833
+[2023-05-16 16:06:07,781][decoder_only.py][INFO] - [18] loss: 0.007947905920445919
+[2023-05-16 16:06:07,798][decoder_only.py][INFO] - [20] loss: 0.004889907315373421
+[2023-05-16 16:06:07,814][decoder_only.py][INFO] - [22] loss: 0.00315659842453897
+[2023-05-16 16:06:07,831][decoder_only.py][INFO] - [24] loss: 0.0023612496443092823
+[2023-05-16 16:06:07,847][decoder_only.py][INFO] - [26] loss: 0.0018658638000488281
+[2023-05-16 16:06:07,864][decoder_only.py][INFO] - [28] loss: 0.0015390607295557857
+[2023-05-16 16:06:07,880][decoder_only.py][INFO] - [30] loss: 0.0013280990533530712
+[2023-05-16 16:06:07,897][decoder_only.py][INFO] - [32] loss: 0.0012469363864511251
+[2023-05-16 16:06:07,914][decoder_only.py][INFO] - [34] loss: 0.0011003632098436356
+[2023-05-16 16:06:07,930][decoder_only.py][INFO] - [36] loss: 0.0010345247574150562
+[2023-05-16 16:06:07,947][decoder_only.py][INFO] - [38] loss: 0.0009060141164809465
+[2023-05-16 16:06:07,963][decoder_only.py][INFO] - [40] loss: 0.0010457668686285615
+[2023-05-16 16:06:07,980][decoder_only.py][INFO] - [42] loss: 0.0009184759692288935
+[2023-05-16 16:06:07,997][decoder_only.py][INFO] - [44] loss: 0.0009153810678981245
+[2023-05-16 16:06:08,014][decoder_only.py][INFO] - [46] loss: 0.0008926573791541159
+[2023-05-16 16:06:08,031][decoder_only.py][INFO] - [48] loss: 0.0007941952790133655
+[2023-05-16 16:06:08,047][decoder_only.py][INFO] - [50] loss: 0.0007773913675919175
+[2023-05-16 16:06:08,068][decoder_only.py][INFO] - [52] loss: 0.0007626108708791435
+[2023-05-16 16:06:08,085][decoder_only.py][INFO] - [54] loss: 0.0008154099341481924
+[2023-05-16 16:06:08,101][decoder_only.py][INFO] - [56] loss: 0.0007628581370227039
+[2023-05-16 16:06:08,117][decoder_only.py][INFO] - [58] loss: 0.0007707259501330554
+[2023-05-16 16:06:08,134][decoder_only.py][INFO] - [60] loss: 0.0006350234034471214
+[2023-05-16 16:06:08,150][decoder_only.py][INFO] - [62] loss: 0.0006403304287232459
+[2023-05-16 16:06:08,167][decoder_only.py][INFO] - [64] loss: 0.0007500876090489328
+[2023-05-16 16:06:08,184][decoder_only.py][INFO] - [66] loss: 0.0006333233905024827
+[2023-05-16 16:06:08,200][decoder_only.py][INFO] - [68] loss: 0.0006023491732776165
+[2023-05-16 16:06:08,216][decoder_only.py][INFO] - [70] loss: 0.0006626487011089921
+[2023-05-16 16:06:08,233][decoder_only.py][INFO] - [72] loss: 0.0005988777265883982
+[2023-05-16 16:06:08,249][decoder_only.py][INFO] - [74] loss: 0.0005807875422760844
+[2023-05-16 16:06:08,266][decoder_only.py][INFO] - [76] loss: 0.0006357175298035145
+[2023-05-16 16:06:08,282][decoder_only.py][INFO] - [78] loss: 0.0005947977770119905
+[2023-05-16 16:06:08,299][decoder_only.py][INFO] - [80] loss: 0.0005467141163535416
+[2023-05-16 16:06:08,316][decoder_only.py][INFO] - [82] loss: 0.0006230443832464516
+[2023-05-16 16:06:08,332][decoder_only.py][INFO] - [84] loss: 0.0005635575507767498
+[2023-05-16 16:06:08,349][decoder_only.py][INFO] - [86] loss: 0.000559416483156383
+[2023-05-16 16:06:08,366][decoder_only.py][INFO] - [88] loss: 0.0005638428265228868
+[2023-05-16 16:06:08,382][decoder_only.py][INFO] - [90] loss: 0.0005215458804741502
+[2023-05-16 16:06:08,399][decoder_only.py][INFO] - [92] loss: 0.0005942902062088251
+[2023-05-16 16:06:08,415][decoder_only.py][INFO] - [94] loss: 0.0005834705661982298
+[2023-05-16 16:06:08,432][decoder_only.py][INFO] - [96] loss: 0.0005771720316261053
+[2023-05-16 16:06:08,448][decoder_only.py][INFO] - [98] loss: 0.0005514727672562003
+[2023-05-16 16:06:08,459][decoder_only.py][INFO] - /private/home/yuandong/luckmatters/ssl/real-dataset/multirun/2023-05-16/16-05-12/0

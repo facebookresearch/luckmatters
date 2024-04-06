@@ -114,6 +114,8 @@ class Model(nn.Module):
         else:
             raise RuntimeError(f"Unknown hidden_multi_type {hidden_multi_type}")
 
+        log.info(f"d_hidden: {d_hidden}")
+
         self.embed = nn.Embedding(M, d) # max_norm=1)
 
         # orthogonal_frozen_embed=False, 
