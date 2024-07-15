@@ -103,47 +103,31 @@ def compute_grad(A, B, C):
     anormsqr = AA.diag()
     bnormsqr = BB.diag() 
 
-    Aconvs = torch.zeros(d, K, dtype=torch.cfloat).to(device)
-    Bconvs = torch.zeros(d, K, dtype=torch.cfloat).to(device)
-    for j in range(K):
-        Aconvs[:,j] = circular_conv(A[:,j], A[:,j])
-        Bconvs[:,j] = circular_conv(B[:,j], B[:,j])
-
-    '''
     # First conv results
-    Aconvs = torch.zeros(d, K, K, dtype=torch.cfloat)
-    Bconvs = torch.zeros(d, K, K, dtype=torch.cfloat)
+    Aconvs = torch.zeros(d, K, K, dtype=torch.cfloat).to(device)
+    Bconvs = torch.zeros(d, K, K, dtype=torch.cfloat).to(device)
     for jj in range(K):
         curr_Aconv = circular_conv(A[:,jj], A[:,jj])
         curr_Bconv = circular_conv(B[:,jj], B[:,jj])
         for j in range(K):
             Aconvs[:,j,jj] = circular_conv(A[:,j], curr_Aconv)
             Bconvs[:,j,jj] = circular_conv(B[:,j], curr_Bconv)
-    '''
         
     # construct convolutional results
-    Aconvs_term = torch.zeros(d, K, dtype=torch.cfloat)
-    Bconvs_term = torch.zeros(d, K, dtype=torch.cfloat)
+    Aconvs_term = torch.zeros(d, K, dtype=torch.cfloat).to(device)
+    Bconvs_term = torch.zeros(d, K, dtype=torch.cfloat).to(device)
     
     for j in range(K):
         for jj in range(K):
-            '''
             Aconvs_term[:,j] += Aconvs[:,j,jj] * CC[jj, j]
             Bconvs_term[:,j] += Bconvs[:,j,jj] * CC[jj, j]
-            '''
-            Aconvs_term[:,j] = Aconvs_term[:, j] + circular_conv(A[:,j], Aconvs[:,jj]) * CC[jj, j]
-            Bconvs_term[:,j] = Bconvs_term[:, j] + circular_conv(B[:,j], Bconvs[:,jj]) * CC[jj, j]
             
-    Aconvs_termC = torch.zeros(K, K, dtype=torch.cfloat)
-    Bconvs_termC = torch.zeros(K, K, dtype=torch.cfloat)
+    Aconvs_termC = torch.zeros(K, K, dtype=torch.cfloat).to(device)
+    Bconvs_termC = torch.zeros(K, K, dtype=torch.cfloat).to(device)
     for j in range(K):
         for jj in range(K):
-            '''
             Aconvs_termC[jj,j] = complex_dot(Aconvs[:,j,jj], A[:,j])
             Bconvs_termC[jj,j] = complex_dot(Bconvs[:,j,jj], B[:,j])
-            '''
-            Aconvs_termC[jj,j] = complex_dot(circular_conv(A[:,j], Aconvs[:,jj]), A[:,j])
-            Bconvs_termC[jj,j] = complex_dot(circular_conv(B[:,j], Bconvs[:,jj]), B[:,j])
 
     dA = B.conj() * C - A @ (CC @ bnormsqr).diag() - 2 * A @ (BB * CC) - Aconvs_term
     dB = A.conj() * C - B @ (CC @ anormsqr).diag() - 2 * B @ (AA * CC) - Bconvs_term
@@ -234,7 +218,7 @@ def main(args):
 
     log.info("Starting...")
 
-    A, B, C = perfect_memorization_init(d, use_cuda=False, remove_e0=True, noise=None)
+    A, B, C = perfect_memorization_init(d, use_cuda=args.use_cuda, remove_e0=True, noise=None)
     # Check whether its gradient is zero
     dA, dB, dC = compute_grad(A, B, C)
     log.info(f"Perfect memory grad: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
@@ -247,12 +231,12 @@ def main(args):
 
     if args.init_type == "perfect_memory":
         log.info("Perfect memory initialization")
-        A, B, C = perfect_memorization_init(d, use_cuda=False, noise=args.noise)
+        A, B, C = perfect_memorization_init(d, use_cuda=args.use_cuda, noise=args.noise)
         # Learning rate is 0.02 
     else:
         # random initialization
         log.info("Random initialization")
-        A, B, C = random_init(d, K, use_cuda=False, noise=args.noise)
+        A, B, C = random_init(d, K, use_cuda=args.use_cuda, noise=args.noise)
         
     # simulate the dynamics after the correction
     check_hemi(A)
