@@ -37,6 +37,8 @@ import argparse
 
 import torch.optim as optim
 
+import hydra
+
 import logging
 log = logging.getLogger(__file__)
 log.setLevel(logging.INFO)
@@ -93,34 +95,53 @@ def compute_grad(A, B, C):
     BB = B.conj().t() @ B
     CC = C.conj().t() @ C
 
+    d = A.shape[0]
     K = A.shape[1]
     device = A.device
     
     # diagonal elements
     anormsqr = AA.diag()
     bnormsqr = BB.diag() 
-    
-    # First conv results
+
     Aconvs = torch.zeros(d, K, dtype=torch.cfloat).to(device)
     Bconvs = torch.zeros(d, K, dtype=torch.cfloat).to(device)
     for j in range(K):
         Aconvs[:,j] = circular_conv(A[:,j], A[:,j])
         Bconvs[:,j] = circular_conv(B[:,j], B[:,j])
+
+    '''
+    # First conv results
+    Aconvs = torch.zeros(d, K, K, dtype=torch.cfloat)
+    Bconvs = torch.zeros(d, K, K, dtype=torch.cfloat)
+    for jj in range(K):
+        curr_Aconv = circular_conv(A[:,jj], A[:,jj])
+        curr_Bconv = circular_conv(B[:,jj], B[:,jj])
+        for j in range(K):
+            Aconvs[:,j,jj] = circular_conv(A[:,j], curr_Aconv)
+            Bconvs[:,j,jj] = circular_conv(B[:,j], curr_Bconv)
+    '''
         
     # construct convolutional results
-    Aconvs_term = torch.zeros(d, K, dtype=torch.cfloat).to(device)
-    Bconvs_term = torch.zeros(d, K, dtype=torch.cfloat).to(device)
+    Aconvs_term = torch.zeros(d, K, dtype=torch.cfloat)
+    Bconvs_term = torch.zeros(d, K, dtype=torch.cfloat)
     
     for j in range(K):
         for jj in range(K):
+            '''
+            Aconvs_term[:,j] += Aconvs[:,j,jj] * CC[jj, j]
+            Bconvs_term[:,j] += Bconvs[:,j,jj] * CC[jj, j]
+            '''
             Aconvs_term[:,j] = Aconvs_term[:, j] + circular_conv(A[:,j], Aconvs[:,jj]) * CC[jj, j]
             Bconvs_term[:,j] = Bconvs_term[:, j] + circular_conv(B[:,j], Bconvs[:,jj]) * CC[jj, j]
             
-            
-    Aconvs_termC = torch.zeros(K, K, dtype=torch.cfloat).to(device)
-    Bconvs_termC = torch.zeros(K, K, dtype=torch.cfloat).to(device)
+    Aconvs_termC = torch.zeros(K, K, dtype=torch.cfloat)
+    Bconvs_termC = torch.zeros(K, K, dtype=torch.cfloat)
     for j in range(K):
         for jj in range(K):
+            '''
+            Aconvs_termC[jj,j] = complex_dot(Aconvs[:,j,jj], A[:,j])
+            Bconvs_termC[jj,j] = complex_dot(Bconvs[:,j,jj], B[:,j])
+            '''
             Aconvs_termC[jj,j] = complex_dot(circular_conv(A[:,j], Aconvs[:,jj]), A[:,j])
             Bconvs_termC[jj,j] = complex_dot(circular_conv(B[:,j], Bconvs[:,jj]), B[:,j])
 
@@ -202,84 +223,77 @@ def perfect_memorization_init(d, use_cuda=False, remove_e0=True, noise=0.001):
 
     return A, B, C
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--seed", type=int, default=0)
-parser.add_argument("-d", type=int, default=7)
-parser.add_argument("--init_type", choices=["perfect_memory", "random"])
-parser.add_argument("--noise", type=float, default=0.001)
-parser.add_argument("--lr", type=float, default=0.02)
-parser.add_argument("--num_iter", type=int, default=1000)
-parser.add_argument("--num_iter_per_print", type=int, default=10)
-parser.add_argument("--num_iter_per_save", type=int, default=100)
-parser.add_argument("--use_hemi", action="store_true")
-parser.add_argument("--use_approx_grad", action="store_true")
-parser.add_argument("--wd", type=float, default=0.0)
+@hydra.main(config_path="config", config_name="sim_dyn.yaml")
+def main(args):
+    log.info(common_utils.print_info(args))
+    # common_utils.set_all_seeds(args.seed)
+    torch.manual_seed(args.seed)
 
-args = parser.parse_args()
-torch.manual_seed(args.seed)
+    # construct a perfect memorization case.
+    d = args.d
 
-# construct a perfect memorization case.
-d = args.d
+    log.info("Starting...")
 
-log.warning("Starting...")
+    A, B, C = perfect_memorization_init(d, use_cuda=False, remove_e0=True, noise=None)
+    # Check whether its gradient is zero
+    dA, dB, dC = compute_grad(A, B, C)
+    log.info(f"Perfect memory grad: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
 
-A, B, C = perfect_memorization_init(d, use_cuda=False, remove_e0=True, noise=None)
-# Check whether its gradient is zero
-dA, dB, dC = compute_grad(A, B, C)
-log.warning(f"Perfect memory grad: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
+    dA, dB, dC = compute_approx_grad(A, B, C)
+    log.info(f"Perfect memory approx grad: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
 
-dA, dB, dC = compute_approx_grad(A, B, C)
-log.warning(f"Perfect memory approx grad: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
+    device = A.device
+    K = A.shape[1]
 
-device = A.device
-K = A.shape[1]
-
-if args.init_type == "perfect_memory":
-    log.warning("Perfect memory initialization")
-    A, B, C = perfect_memorization_init(d, use_cuda=False, noise=args.noise)
-    # Learning rate is 0.02 
-else:
-    # random initialization
-    log.warning("Random initialization")
-    A, B, C = random_init(d, K, use_cuda=False, noise=args.noise)
-    
-# simulate the dynamics after the correction
-check_hemi(A)
-check_hemi(B)
-check_hemi(C)
-
-dA, dB, dC = compute_grad(A, B, C)
-log.warning(f"After adding noise = {args.noise}, grad: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
-
-dA, dB, dC = compute_approx_grad(A, B, C)
-log.warning(f"After adding noise = {args.noise}, approx_grad: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
-
-allA = torch.randn(d, K, args.num_iter, dtype=torch.cfloat).to(device)
-allB = torch.randn(d, K, args.num_iter, dtype=torch.cfloat).to(device)
-allC = torch.randn(d, K, args.num_iter, dtype=torch.cfloat).to(device)
-
-for t in range(args.num_iter):
-    allA[:,:,t] = A
-    allB[:,:,t] = B
-    allC[:,:,t] = C
-
-    if args.use_approx_grad:
-        dA, dB, dC = compute_approx_grad(A, B, C)
+    if args.init_type == "perfect_memory":
+        log.info("Perfect memory initialization")
+        A, B, C = perfect_memorization_init(d, use_cuda=False, noise=args.noise)
+        # Learning rate is 0.02 
     else:
-        dA, dB, dC = compute_grad(A, B, C)
-    
-    A = A + args.lr * (dA - args.wd * A)
-    B = B + args.lr * (dB - args.wd * B)
-    C = C + args.lr * (dC - args.wd * C)
+        # random initialization
+        log.info("Random initialization")
+        A, B, C = random_init(d, K, use_cuda=False, noise=args.noise)
+        
+    # simulate the dynamics after the correction
+    check_hemi(A)
+    check_hemi(B)
+    check_hemi(C)
 
-    if t % args.num_iter_per_print == 0:
-        log.warning(f"Iter {t}: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
+    dA, dB, dC = compute_grad(A, B, C)
+    log.info(f"After adding noise = {args.noise}, grad: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
 
-    if t % args.num_iter_per_save == 0:
-        # Save the results
-        torch.save(dict(A=A, B=B, C=C, allA=allA[:,:,:t+1], allB=allB[:,:,:t+1], allC=allC[:,:,:t+1]), f"abc{t}.pth")
-    
-    if args.use_hemi:
-        keep_hemi(A)
-        keep_hemi(B)
-        keep_hemi(C)
+    dA, dB, dC = compute_approx_grad(A, B, C)
+    log.info(f"After adding noise = {args.noise}, approx_grad: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
+
+    allA = torch.randn(d, K, args.num_iter, dtype=torch.cfloat).to(device)
+    allB = torch.randn(d, K, args.num_iter, dtype=torch.cfloat).to(device)
+    allC = torch.randn(d, K, args.num_iter, dtype=torch.cfloat).to(device)
+
+    for t in range(args.num_iter):
+        allA[:,:,t] = A
+        allB[:,:,t] = B
+        allC[:,:,t] = C
+
+        if args.use_approx_grad:
+            dA, dB, dC = compute_approx_grad(A, B, C)
+        else:
+            dA, dB, dC = compute_grad(A, B, C)
+        
+        A = A + args.lr * (dA - args.wd * A)
+        B = B + args.lr * (dB - args.wd * B)
+        C = C + args.lr * (dC - args.wd * C)
+
+        if t % args.num_iter_per_print == 0:
+            log.info(f"Iter {t}: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
+
+        if t % args.num_iter_per_save == 0:
+            # Save the results
+            torch.save(dict(A=A, B=B, C=C, allA=allA[:,:,:t+1], allB=allB[:,:,:t+1], allC=allC[:,:,:t+1]), f"abc{t}.pth")
+        
+        if args.use_hemi:
+            keep_hemi(A)
+            keep_hemi(B)
+            keep_hemi(C)
+
+if __name__ == '__main__':
+    main()
