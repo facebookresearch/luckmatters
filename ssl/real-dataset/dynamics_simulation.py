@@ -114,21 +114,12 @@ def compute_grad(A, B, C):
             Bconvs[:,j,jj] = circular_conv(B[:,j], curr_Bconv)
         
     # construct convolutional results
-    Aconvs_term = torch.zeros(d, K, dtype=torch.cfloat).to(device)
-    Bconvs_term = torch.zeros(d, K, dtype=torch.cfloat).to(device)
-    
-    for j in range(K):
-        for jj in range(K):
-            Aconvs_term[:,j] += Aconvs[:,j,jj] * CC[jj, j]
-            Bconvs_term[:,j] += Bconvs[:,j,jj] * CC[jj, j]
+    Aconvs_term = torch.einsum("abc,cb->ab", Aconvs, CC)
+    Bconvs_term = torch.einsum("abc,cb->ab", Bconvs, CC)
             
-    Aconvs_termC = torch.zeros(K, K, dtype=torch.cfloat).to(device)
-    Bconvs_termC = torch.zeros(K, K, dtype=torch.cfloat).to(device)
-    for j in range(K):
-        for jj in range(K):
-            Aconvs_termC[jj,j] = complex_dot(Aconvs[:,j,jj], A[:,j])
-            Bconvs_termC[jj,j] = complex_dot(Bconvs[:,j,jj], B[:,j])
-
+    Aconvs_termC = torch.einsum("abc,ab->cb", Aconvs.conj(), A) 
+    Bconvs_termC = torch.einsum("abc,ab->cb", Bconvs.conj(), B) 
+    
     dA = B.conj() * C - A @ (CC @ bnormsqr).diag() - 2 * A @ (BB * CC) - Aconvs_term
     dB = A.conj() * C - B @ (CC @ anormsqr).diag() - 2 * B @ (AA * CC) - Bconvs_term
     dC = (A*B) - C @ (torch.outer(anormsqr, bnormsqr) + torch.outer(bnormsqr, anormsqr) + 4 * AA * BB + Aconvs_termC + Bconvs_termC) / 2
@@ -207,6 +198,44 @@ def perfect_memorization_init(d, use_cuda=False, remove_e0=True, noise=0.001):
 
     return A, B, C
 
+def find_optimal_delta(A, B, C, r=0.01, eps=0.001, nIter=100):
+    # Search local dA, dB, dC that lead to maximal deviation. 
+
+    def get_perturb_like(M, r):
+        res = M.randn_like()
+        return res / res.norm() * r
+
+    def add_perturb(M, eps, r):
+        res = M.randn_like() 
+        dM = M + res / res.norm() * eps
+        return dM / dM.norm() * r
+
+    dA = get_perturb_like(A, r)
+    dB = get_perturb_like(B, r)
+    dC = get_perturb_like(C, r)
+
+    for t in range(nIter):
+        # Locally perturbation
+        best_score = -10000.0
+        best_perturb = []
+        for k in range(10):
+            dA_perturb = add_perturb(dA, eps, r)
+            dB_perturb = add_perturb(dB, eps, r)
+            dC_perturb = add_perturb(dC, eps, r)
+
+            dA2, dB2, dC2 = compute_grad(A + dA_perturb, B + dB_perturb, C + dC_perturb)
+            # compute score
+            score = (dA_perturb * dA2).sum() + (dB_perturb * dB2).sum() + (dC_perturb * dC2).sum() 
+            if score > best_score:
+                best_score = score
+                best_perturb = [dA_perturb, dB_perturb, dC_perturb]
+
+        # Then we update
+        dA, dB, dC = best_perturb
+
+    return dA, dB, dC
+
+
 @hydra.main(config_path="config", config_name="sim_dyn.yaml")
 def main(args):
     log.info(common_utils.print_info(args))
@@ -222,6 +251,10 @@ def main(args):
     # Check whether its gradient is zero
     dA, dB, dC = compute_grad(A, B, C)
     log.info(f"Perfect memory grad: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")
+
+    dA, dB, dC = find_optimal_delta(A, B, C, r=0.01, eps=0.001, nIter=100)
+    import pdb
+    pdb.set_trace()
 
     dA, dB, dC = compute_approx_grad(A, B, C)
     log.info(f"Perfect memory approx grad: |dA| = {dA.norm()}, |dB| = {dB.norm()}, |dC| = {dC.norm()}")

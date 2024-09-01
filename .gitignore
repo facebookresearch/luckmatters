@@ -1,4 +1,6 @@
 __pycache__
 *.swp
 *.pdf
+*.pt
+*.pth
 */outputs/*
