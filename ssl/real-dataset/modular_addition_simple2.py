@@ -25,7 +25,8 @@ def compute_loss(outputs, labels, loss_type):
         if loss_type == "nll":
             loss = loss + nll_criterion(o, labels[:,i])
         elif loss_type == "mse":
-            loss = loss + o.pow(2).sum(dim=1).mean() - 2 * o.gather(1, labels[:,i].unsqueeze(1)).mean() + 1 
+            o_zero_mean = o - o.mean(dim=1, keepdim=True)
+            loss = loss + o_zero_mean.pow(2).sum(dim=1).mean() - 2 * o_zero_mean.gather(1, labels[:,i].unsqueeze(1)).mean() + 1 - 1.0 / o.shape[1] 
         else:
             raise RuntimeError(f"Unknown loss! {args.loss}")
 
@@ -46,7 +47,7 @@ def test_model(model, X_test, y_test, loss_type):
 
 # Define the neural network model
 class ModularAdditionNN(nn.Module):
-    def __init__(self, M, hidden_size, activation="sqr"):
+    def __init__(self, M, hidden_size, activation="sqr", use_bn=False):
         super(ModularAdditionNN, self).__init__()
         self.embedding = nn.Embedding(M, M).requires_grad_(False)
         with torch.no_grad():
@@ -54,7 +55,13 @@ class ModularAdditionNN(nn.Module):
             
         self.layera = nn.Linear(M, hidden_size, bias=False)
         self.layerb = nn.Linear(M, hidden_size, bias=False)
-        self.layerc = nn.Linear(hidden_size, M, bias=False) 
+        self.layerc = nn.Linear(hidden_size, M, bias=False)
+
+        if use_bn:
+            self.bn = nn.BatchNorm1d(hidden_size)
+            self.use_bn = True
+        else:
+            self.use_bn = False
 
         self.relu = nn.ReLU()
         self.activation = activation
@@ -65,6 +72,9 @@ class ModularAdditionNN(nn.Module):
         y2 = self.embedding(x[:,1]) 
         # x = torch.relu(self.layer1(x))
         x = self.layera(y1) + self.layerb(y2) 
+        if self.use_bn:
+            x = self.bn(x)
+
         if self.activation == "sqr": 
             x = x.pow(2)
         elif self.activation == "relu":
@@ -73,6 +83,12 @@ class ModularAdditionNN(nn.Module):
             raise RuntimeError(f"Unknown activation = {self.activation}")
             
         return [self.layerc(x)]
+
+    def normalize(self):
+        with torch.no_grad():
+            self.layera.weight[:] -= self.layera.weight.mean(dim=1, keepdim=True) 
+            self.layerb.weight[:] -= self.layerb.weight.mean(dim=1, keepdim=True) 
+            self.layerc.weight[:] -= self.layerc.weight.mean(dim=0, keepdim=True) 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
@@ -84,7 +100,11 @@ parser.add_argument("--activation", choices=["relu", "sqr"], default="sqr")
 parser.add_argument("--num_epochs", type=int, default=3000)
 parser.add_argument("--test_size", type=float, default=0.7)
 parser.add_argument("--weight_decay", type=float, default=1e-4)
+parser.add_argument("--use_bn", action="store_true")
 parser.add_argument("--loss", choices=["nll", "mse"], default="nll")
+parser.add_argument("--save_interval", type=int, default=1000)
+parser.add_argument("--eval_interval", type=int, default=100)
+parser.add_argument("--normalize", action="store_true")
 
 args = parser.parse_args()
 
@@ -124,13 +144,13 @@ y_train = y_train.cuda()
 y_test = y_test.cuda()
 
 # Initialize the model, loss function, and optimizer
-model = ModularAdditionNN(args.M, args.hidden_size, activation=args.activation)
+model = ModularAdditionNN(args.M, args.hidden_size, activation=args.activation, use_bn=args.use_bn)
 
 model = model.cuda()
 
 
 if args.optim == "sgd":
-    optimizer = optim.SGD(model.parameters(), lr=3, momentum=0.9, weight_decay=args.weight_decay)
+    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
 elif args.optim == "adam":
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
 else:
@@ -141,8 +161,8 @@ else:
 results = []
 
 # Training loop
-model.train()
 for epoch in range(args.num_epochs):
+    model.train()
     optimizer.zero_grad()
     
     # Forward pass
@@ -153,8 +173,11 @@ for epoch in range(args.num_epochs):
     # Backward and optimize
     loss.backward()
     optimizer.step()
-    
-    if (epoch+1) % 10 == 0:
+
+    if args.normalize:
+        model.normalize()
+
+    if (epoch+1) % args.eval_interval == 0:
         print(f'Epoch [{epoch}/{args.num_epochs}], Loss: {loss.item():.4f}')
 
         # Test the model
@@ -169,11 +192,10 @@ for epoch in range(args.num_epochs):
 
         results.append(dict(epoch=epoch, train_acc=train_acc, test_acc=test_acc, train_loss=train_loss, test_loss=test_loss))
 
-        filename = f"model{epoch:04}_train{train_acc:.2f}_loss{train_loss:.4f}_test{test_acc:.2f}_loss{test_loss:.4f}.pt" 
+    if (epoch+1) % args.save_interval == 0:
+        filename = f"model{epoch:05}_train{train_acc:.2f}_loss{train_loss:.4f}_test{test_acc:.2f}_loss{test_loss:.4f}.pt" 
 
         data = dict(model=model.state_dict(), results=results) 
 
         torch.save(data, filename)
-
-        model.train()
 
