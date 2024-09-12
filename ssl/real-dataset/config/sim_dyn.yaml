@@ -1,0 +1,12 @@
+seed: 0
+d: 7
+use_cuda: false
+init_type: "perfect_memory"
+noise: 0.001
+lr: 0.02
+num_iter: 1000
+num_iter_per_print: 10
+num_iter_per_save: 100
+use_hemi: false
+use_approx_grad: false
+wd: 0.0

@@ -1,9 +1,19 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import argparse
 import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
+from modular_addition_load import process_one
+
+import hydra
+
+import logging
+log = logging.getLogger(__file__)
+log.setLevel(logging.INFO)
+
+import common_utils
 
 # Define the modular addition function
 def modular_addition(x, y, mod):
@@ -28,7 +38,7 @@ def compute_loss(outputs, labels, loss_type):
             o_zero_mean = o - o.mean(dim=1, keepdim=True)
             loss = loss + o_zero_mean.pow(2).sum(dim=1).mean() - 2 * o_zero_mean.gather(1, labels[:,i].unsqueeze(1)).mean() + 1 - 1.0 / o.shape[1] 
         else:
-            raise RuntimeError(f"Unknown loss! {args.loss}")
+            raise RuntimeError(f"Unknown loss! {loss_type}")
 
     return loss
 
@@ -90,112 +100,100 @@ class ModularAdditionNN(nn.Module):
             self.layerb.weight[:] -= self.layerb.weight.mean(dim=1, keepdim=True) 
             self.layerc.weight[:] -= self.layerc.weight.mean(dim=0, keepdim=True) 
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--seed", type=int, default=0)
-parser.add_argument("-M", type=int, default=127)
-parser.add_argument("--hidden_size", type=int, default=512)
-parser.add_argument("--learning_rate", type=float, default=0.001)
-parser.add_argument("--optim", choices=["adam", "sgd"], default="adam")
-parser.add_argument("--activation", choices=["relu", "sqr"], default="sqr")
-parser.add_argument("--num_epochs", type=int, default=3000)
-parser.add_argument("--test_size", type=float, default=0.7)
-parser.add_argument("--weight_decay", type=float, default=1e-4)
-parser.add_argument("--use_bn", action="store_true")
-parser.add_argument("--loss", choices=["nll", "mse"], default="nll")
-parser.add_argument("--save_interval", type=int, default=1000)
-parser.add_argument("--eval_interval", type=int, default=100)
-parser.add_argument("--normalize", action="store_true")
+@hydra.main(config_path="config", config_name="dyn_madd.yaml")
+def main(args):
+    # Set random seed for reproducibility
+    log.info(common_utils.print_info(args))
+    common_utils.set_all_seeds(args.seed)
+    # torch.manual_seed(args.seed)
 
-args = parser.parse_args()
+    # Generate dataset
+    dataset = generate_dataset(args.M)
+    dataset_size = len(dataset)
 
-# Set random seed for reproducibility
-torch.manual_seed(args.seed)
+    # Prepare data for training and testing
+    X = torch.LongTensor(dataset_size, 2)
+    # Use 
+    labels = torch.LongTensor(dataset_size, 1)
 
-# Hyperparameters
-# sqr activation, no bn
-# learning_rate = 0.0002
-# sqr activation, no bn and with MSE
-# learning_rate = 0.001
-# sqr activation, with bn
-# learning_rate = 0.002
+    for i, (x, y, z) in enumerate(dataset):
+        X[i, 0] = x
+        X[i, 1] = y
+        labels[i] = z
 
-# Generate dataset
-dataset = generate_dataset(args.M)
-dataset_size = len(dataset)
+    y = labels
 
-# Prepare data for training and testing
-X = torch.LongTensor(dataset_size, 2)
-# Use 
-labels = torch.LongTensor(dataset_size, 1)
+    # Split the dataset into training and test sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size, random_state=args.seed)
 
-for i, (x, y, z) in enumerate(dataset):
-    X[i, 0] = x
-    X[i, 1] = y
-    labels[i] = z
+    X_train = X_train.cuda()
+    X_test = X_test.cuda()
+    y_train = y_train.cuda()
+    y_test = y_test.cuda()
 
-y = labels
+    # Initialize the model, loss function, and optimizer
+    model = ModularAdditionNN(args.M, args.hidden_size, activation=args.activation, use_bn=args.use_bn)
 
-# Split the dataset into training and test sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size, random_state=args.seed)
+    model = model.cuda()
 
-X_train = X_train.cuda()
-X_test = X_test.cuda()
-y_train = y_train.cuda()
-y_test = y_test.cuda()
+    if args.optim == "sgd":
+        optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
+    elif args.optim == "adam":
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    else:
+        raise RuntimeError(f"Unknown optimizer! {args.optim}")
 
-# Initialize the model, loss function, and optimizer
-model = ModularAdditionNN(args.M, args.hidden_size, activation=args.activation, use_bn=args.use_bn)
+    # optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=3e-4)
 
-model = model.cuda()
+    results = []
 
+    # Training loop
+    for epoch in range(args.num_epochs):
+        if epoch % args.save_interval == 0 or epoch < args.init_save_range:
+            # Test the model
+            train_accuracies, train_loss = test_model(model, X_train, y_train, args.loss_func)
+            test_accuracies, test_loss = test_model(model, X_test, y_test, args.loss_func)
 
-if args.optim == "sgd":
-    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
-elif args.optim == "adam":
-    optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-else:
-    raise RuntimeError(f"Unknown optimizer! {args.optim}")
+            train_acc = train_accuracies[0]
+            test_acc = test_accuracies[0]
 
-# optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=3e-4)
+            log.info(f"Train Accuracy/Loss: {train_acc}/{train_loss}")
+            log.info(f"Test Accuracy/Loss: {test_acc}/{test_loss}\n")
 
-results = []
+            results.append(dict(epoch=epoch, train_acc=train_acc, test_acc=test_acc, train_loss=train_loss, test_loss=test_loss))
 
-# Training loop
-for epoch in range(args.num_epochs):
-    model.train()
-    optimizer.zero_grad()
-    
-    # Forward pass
-    outputs = model(X_train)
-    # loss = criterion(outputs, y_train)
-    loss = compute_loss(outputs, y_train, args.loss)
-    
-    # Backward and optimize
-    loss.backward()
-    optimizer.step()
+            filename = f"model{epoch:05}_train{train_acc:.2f}_loss{train_loss:.4f}_test{test_acc:.2f}_loss{test_loss:.4f}.pt" 
 
-    if args.normalize:
-        model.normalize()
+            data = dict(model=model.state_dict(), results=results) 
 
-    if (epoch+1) % args.eval_interval == 0:
-        print(f'Epoch [{epoch}/{args.num_epochs}], Loss: {loss.item():.4f}')
+            torch.save(data, filename)
 
-        # Test the model
-        train_accuracies, train_loss = test_model(model, X_train, y_train, args.loss)
-        test_accuracies, test_loss = test_model(model, X_test, y_test, args.loss)
+        model.train()
+        optimizer.zero_grad()
+        
+        # Forward pass
+        outputs = model(X_train)
+        # loss = criterion(outputs, y_train)
+        loss = compute_loss(outputs, y_train, args.loss_func)
+        
+        # Backward and optimize
+        loss.backward()
+        optimizer.step()
 
-        train_acc = train_accuracies[0]
-        test_acc = test_accuracies[0]
+        if args.normalize:
+            model.normalize()
 
-        print(f"Train Accuracy/Loss: {train_acc}/{train_loss}")
-        print(f"Test Accuracy/Loss: {test_acc}/{test_loss}\n")
+        if epoch % args.eval_interval == 0:
+            log.info(f'Epoch [{epoch}/{args.num_epochs}], Loss: {loss.item():.4f}')
 
-        results.append(dict(epoch=epoch, train_acc=train_acc, test_acc=test_acc, train_loss=train_loss, test_loss=test_loss))
+    # Process the data and save to a final file.
+    log.info("Post-Processing data ...")
+    entry = process_one(os.getcwd())
 
-    if (epoch+1) % args.save_interval == 0:
-        filename = f"model{epoch:05}_train{train_acc:.2f}_loss{train_loss:.4f}_test{test_acc:.2f}_loss{test_loss:.4f}.pt" 
+    log.info("Saving ... ")
+    torch.save(entry, "./data.pth")
 
-        data = dict(model=model.state_dict(), results=results) 
+    print(os.getcwd())
 
-        torch.save(data, filename)
-
+if __name__ == '__main__':
+    main()
