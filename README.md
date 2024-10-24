@@ -1,4 +1,12 @@
-This repo contains the code of the following 8 papers:
+This repo contains the code of the following 9 papers:
+
+## Algebraic Structure of Representation in Reasoning tasks 
+**Composing Global Optimizers to Reasoning Tasks via Algebraic Objects in Neural Nets**
+
+Yuandong Tian
+
+[arXiv'24](https://arxiv.org/abs/2410.01779)
+
 
 ## Analysis of Transformer training dynamics (`./ssl/real-dataset`)
 **Scan and Snap: Understanding Training Dynamics and Token Composition in 1-layer Transformer**

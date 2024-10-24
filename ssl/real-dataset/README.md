@@ -185,7 +185,7 @@ You can also do a sweeping with the following command:
 python modular_addition_simple2.py -m activation=sqr loss_func=mse num_epochs=10000 weight_decay=1e-5,5e-5,1e-4 hidden_size=256,512,1024,2048 learning_rate=0.002 M=23,71,127 test_size=0.1 save_interval=100 seed=1,2,3,4,5
 ```
 
-For the specific experiment of Fig. 3 and Fig. 4/Tbl. 2/Fig. 5, we have provided logs to fully reproduce the experiments. For Fig. 3, please check `modular_addition_simple2_fig3.log`. For Fig. 4/Tbl. 2/Fig. 5, please check `sweep.log`. 
+For the specific experiment of Fig. 3 and Fig. 4/Tbl. 2/Fig. 5, we have provided logs to fully reproduce the experiments. For Fig. 3, please check [here](./modular_addition_simple2_fig3.log). For Fig. 4/Tbl. 2/Fig. 5, please check [here](sweep.log). 
 
 Given the resulting folder, you could run the following scripts to load and visualize the results.
 + Use `python draw_dyn_fig3.py [exp_folder]` to draw Fig. 3 for one specific experiment. To reproduce the experiment, the log for that specific figure (hyperparameters are included) is at . 
