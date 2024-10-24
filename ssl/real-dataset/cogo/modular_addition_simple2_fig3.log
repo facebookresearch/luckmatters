@@ -1,0 +1,1016 @@
+seed: 5
+M: 23
+hidden_size: 512
+learning_rate: 0.01
+optim: adam
+activation: sqr
+num_epochs: 10000
+test_size: 0.1
+weight_decay: 0.0001
+use_bn: false
+loss_func: mse
+save_interval: 100
+init_save_range: 200
+eval_interval: 100
+normalize: false
+run_name: 09-12_16-56
+githash: ba2de90
+
+
+[2024-09-12 17:02:25,449][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.05042016806722689/0.9693093299865723
+[2024-09-12 17:02:25,449][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.05660377358490566/0.9671908617019653
+
+[2024-09-12 17:02:25,461][modular_addition_simple2.py][INFO] - Epoch [0/10000], Loss: 0.9693
+[2024-09-12 17:02:25,463][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.14495798319327732/1.141622543334961
+[2024-09-12 17:02:25,463][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.03773584905660377/1.2399334907531738
+
+[2024-09-12 17:02:25,472][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.22058823529411764/0.9262043833732605
+[2024-09-12 17:02:25,472][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.0281175374984741
+
+[2024-09-12 17:02:25,483][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.3130252100840336/0.9510902166366577
+[2024-09-12 17:02:25,483][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.059679388999939
+
+[2024-09-12 17:02:25,497][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.34663865546218486/0.9712867736816406
+[2024-09-12 17:02:25,497][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.018867924528301886/1.095691442489624
+
+[2024-09-12 17:02:25,508][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.3907563025210084/0.9215617179870605
+[2024-09-12 17:02:25,508][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.0653789043426514
+
+[2024-09-12 17:02:25,518][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.5777310924369747/0.8671776056289673
+[2024-09-12 17:02:25,518][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.0340131521224976
+
+[2024-09-12 17:02:25,529][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.7247899159663865/0.8416000008583069
+[2024-09-12 17:02:25,529][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.0366737842559814
+
+[2024-09-12 17:02:25,540][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.6407563025210085/0.837225079536438
+[2024-09-12 17:02:25,540][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.0653584003448486
+
+[2024-09-12 17:02:25,551][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.6491596638655462/0.8329852223396301
+[2024-09-12 17:02:25,552][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.095868468284607
+
+[2024-09-12 17:02:25,563][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.6659663865546218/0.813883900642395
+[2024-09-12 17:02:25,563][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.1099773645401
+
+[2024-09-12 17:02:25,575][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.7962184873949579/0.779259979724884
+[2024-09-12 17:02:25,575][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.106400728225708
+
+[2024-09-12 17:02:25,586][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.957983193277311/0.7388246059417725
+[2024-09-12 17:02:25,586][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.096937656402588
+
+[2024-09-12 17:02:25,597][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.9957983193277311/0.7027676105499268
+[2024-09-12 17:02:25,598][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.0953874588012695
+
+[2024-09-12 17:02:25,608][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.9957983193277311/0.673722505569458
+[2024-09-12 17:02:25,608][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.1083929538726807
+
+[2024-09-12 17:02:25,619][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.9831932773109243/0.6423850059509277
+[2024-09-12 17:02:25,620][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.1291887760162354
+
+[2024-09-12 17:02:25,630][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 0.9894957983193278/0.5944464206695557
+[2024-09-12 17:02:25,630][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.1428390741348267
+
+[2024-09-12 17:02:25,640][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.5326446294784546
+[2024-09-12 17:02:25,640][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.1478278636932373
+
+[2024-09-12 17:02:25,651][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.47889184951782227
+[2024-09-12 17:02:25,651][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.1587332487106323
+
+[2024-09-12 17:02:25,662][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.43465715646743774
+[2024-09-12 17:02:25,662][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.0/1.1671466827392578
+
+[2024-09-12 17:02:25,672][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.37658941745758057
+[2024-09-12 17:02:25,673][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.018867924528301886/1.1487722396850586
+
+[2024-09-12 17:02:25,683][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.31309080123901367
+[2024-09-12 17:02:25,683][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.018867924528301886/1.122270941734314
+
+[2024-09-12 17:02:25,694][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.27209997177124023
+[2024-09-12 17:02:25,695][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.03773584905660377/1.111798882484436
+
+[2024-09-12 17:02:25,706][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.2285756915807724
+[2024-09-12 17:02:25,707][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.1320754716981132/1.0705199241638184
+
+[2024-09-12 17:02:25,720][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.18484561145305634
+[2024-09-12 17:02:25,720][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.16981132075471697/1.0187265872955322
+
+[2024-09-12 17:02:25,734][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.16817091405391693
+[2024-09-12 17:02:25,735][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.2641509433962264/0.9949965476989746
+
+[2024-09-12 17:02:25,751][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.13636182248592377
+[2024-09-12 17:02:25,751][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.37735849056603776/0.9091635942459106
+
+[2024-09-12 17:02:25,766][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.12753771245479584
+[2024-09-12 17:02:25,767][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.5283018867924528/0.8534924983978271
+
+[2024-09-12 17:02:25,781][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.11504124104976654
+[2024-09-12 17:02:25,781][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.5471698113207547/0.8293530941009521
+
+[2024-09-12 17:02:25,795][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.10020671784877777
+[2024-09-12 17:02:25,796][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.6792452830188679/0.7617952823638916
+
+[2024-09-12 17:02:25,808][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.09573458135128021
+[2024-09-12 17:02:25,809][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.8301886792452831/0.7244776487350464
+
+[2024-09-12 17:02:25,819][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.07584153115749359
+[2024-09-12 17:02:25,820][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.8490566037735849/0.6962300539016724
+
+[2024-09-12 17:02:25,831][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.07270847260951996
+[2024-09-12 17:02:25,831][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.8679245283018868/0.6752605438232422
+
+[2024-09-12 17:02:25,842][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0538397915661335
+[2024-09-12 17:02:25,842][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9056603773584906/0.6490453481674194
+
+[2024-09-12 17:02:25,853][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.051377881318330765
+[2024-09-12 17:02:25,854][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9056603773584906/0.647940456867218
+
+[2024-09-12 17:02:25,863][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.036289799958467484
+[2024-09-12 17:02:25,863][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9245283018867925/0.6368334293365479
+
+[2024-09-12 17:02:25,873][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.037129033356904984
+[2024-09-12 17:02:25,873][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9433962264150944/0.6359601020812988
+
+[2024-09-12 17:02:25,886][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.02873455360531807
+[2024-09-12 17:02:25,886][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9433962264150944/0.6291201114654541
+
+[2024-09-12 17:02:25,897][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.030115772038698196
+[2024-09-12 17:02:25,897][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9433962264150944/0.6378185749053955
+
+[2024-09-12 17:02:25,908][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.028123963624238968
+[2024-09-12 17:02:25,908][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9433962264150944/0.6333695650100708
+
+[2024-09-12 17:02:25,920][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.02762465551495552
+[2024-09-12 17:02:25,920][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9245283018867925/0.6277397871017456
+
+[2024-09-12 17:02:25,934][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.028474021703004837
+[2024-09-12 17:02:25,934][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9433962264150944/0.6268349289894104
+
+[2024-09-12 17:02:25,946][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.02588503435254097
+[2024-09-12 17:02:25,947][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9622641509433962/0.6166069507598877
+
+[2024-09-12 17:02:25,958][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.02573101595044136
+[2024-09-12 17:02:25,958][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9622641509433962/0.6067041158676147
+
+[2024-09-12 17:02:25,969][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.022768069058656693
+[2024-09-12 17:02:25,969][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 0.9622641509433962/0.5973212718963623
+
+[2024-09-12 17:02:25,980][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.020042050629854202
+[2024-09-12 17:02:25,980][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.5830644369125366
+
+[2024-09-12 17:02:25,991][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.017963577061891556
+[2024-09-12 17:02:25,991][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.5638366937637329
+
+[2024-09-12 17:02:26,002][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.014089871197938919
+[2024-09-12 17:02:26,003][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.546965479850769
+
+[2024-09-12 17:02:26,014][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.012763071805238724
+[2024-09-12 17:02:26,014][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.5352298021316528
+
+[2024-09-12 17:02:26,024][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.009861279278993607
+[2024-09-12 17:02:26,025][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.5171976089477539
+
+[2024-09-12 17:02:26,035][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.008836913853883743
+[2024-09-12 17:02:26,035][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4986228942871094
+
+[2024-09-12 17:02:26,048][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.007739413529634476
+[2024-09-12 17:02:26,048][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4838014841079712
+
+[2024-09-12 17:02:26,057][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.006720889359712601
+[2024-09-12 17:02:26,058][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4732353687286377
+
+[2024-09-12 17:02:26,067][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.006773699074983597
+[2024-09-12 17:02:26,068][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.46288126707077026
+
+[2024-09-12 17:02:26,078][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.005743671208620071
+[2024-09-12 17:02:26,078][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4511857032775879
+
+[2024-09-12 17:02:26,089][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.005715359002351761
+[2024-09-12 17:02:26,089][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4447472095489502
+
+[2024-09-12 17:02:26,099][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.004982162266969681
+[2024-09-12 17:02:26,100][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4403719902038574
+
+[2024-09-12 17:02:26,111][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.004326153546571732
+[2024-09-12 17:02:26,111][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4373849034309387
+
+[2024-09-12 17:02:26,121][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.004042197018861771
+[2024-09-12 17:02:26,121][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.43552303314208984
+
+[2024-09-12 17:02:26,131][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.003199387341737747
+[2024-09-12 17:02:26,131][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4332897663116455
+
+[2024-09-12 17:02:26,146][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.003267098218202591
+[2024-09-12 17:02:26,146][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.43422627449035645
+
+[2024-09-12 17:02:26,158][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.002729225903749466
+[2024-09-12 17:02:26,158][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4346815347671509
+
+[2024-09-12 17:02:26,170][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0029171593487262726
+[2024-09-12 17:02:26,170][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4332176446914673
+
+[2024-09-12 17:02:26,185][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.002763140946626663
+[2024-09-12 17:02:26,185][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.43184083700180054
+
+[2024-09-12 17:02:26,197][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.002759922295808792
+[2024-09-12 17:02:26,197][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.431354820728302
+
+[2024-09-12 17:02:26,208][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0027912743389606476
+[2024-09-12 17:02:26,208][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.42816972732543945
+
+[2024-09-12 17:02:26,218][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0025066621601581573
+[2024-09-12 17:02:26,218][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4230455160140991
+
+[2024-09-12 17:02:26,237][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.002454865723848343
+[2024-09-12 17:02:26,237][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4188574552536011
+
+[2024-09-12 17:02:26,247][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0020504482090473175
+[2024-09-12 17:02:26,248][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.41358304023742676
+
+[2024-09-12 17:02:26,258][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0018325932323932648
+[2024-09-12 17:02:26,258][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.4066483974456787
+
+[2024-09-12 17:02:26,269][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0015240199863910675
+[2024-09-12 17:02:26,269][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.39930689334869385
+
+[2024-09-12 17:02:26,281][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0012307651340961456
+[2024-09-12 17:02:26,281][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.3927801251411438
+
+[2024-09-12 17:02:26,292][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0011069662868976593
+[2024-09-12 17:02:26,292][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.3863588571548462
+
+[2024-09-12 17:02:26,303][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0008719451725482941
+[2024-09-12 17:02:26,303][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.3793940544128418
+
+[2024-09-12 17:02:26,314][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0008402355015277863
+[2024-09-12 17:02:26,314][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.3733970522880554
+
+[2024-09-12 17:02:26,327][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0007266290485858917
+[2024-09-12 17:02:26,327][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.3683149814605713
+
+[2024-09-12 17:02:26,337][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0006722100079059601
+[2024-09-12 17:02:26,337][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.3637580871582031
+
+[2024-09-12 17:02:26,348][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0006377585232257843
+[2024-09-12 17:02:26,348][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.3599672317504883
+
+[2024-09-12 17:02:26,362][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0005487091839313507
+[2024-09-12 17:02:26,362][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.35676121711730957
+
+[2024-09-12 17:02:26,373][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.000548291951417923
+[2024-09-12 17:02:26,373][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.35401880741119385
+
+[2024-09-12 17:02:26,384][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0004826672375202179
+[2024-09-12 17:02:26,384][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.351739764213562
+
+[2024-09-12 17:02:26,396][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0004978664219379425
+[2024-09-12 17:02:26,396][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.34982216358184814
+
+[2024-09-12 17:02:26,407][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0004930384457111359
+[2024-09-12 17:02:26,407][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.3478362560272217
+
+[2024-09-12 17:02:26,420][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0005123503506183624
+[2024-09-12 17:02:26,420][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.34565621614456177
+
+[2024-09-12 17:02:26,433][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0005372650921344757
+[2024-09-12 17:02:26,433][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.34321916103363037
+
+[2024-09-12 17:02:26,452][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0005449540913105011
+[2024-09-12 17:02:26,452][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.34062373638153076
+
+[2024-09-12 17:02:26,465][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.000551808625459671
+[2024-09-12 17:02:26,466][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.33762794733047485
+
+[2024-09-12 17:02:26,478][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0005307085812091827
+[2024-09-12 17:02:26,478][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.3340529203414917
+
+[2024-09-12 17:02:26,490][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0004936940968036652
+[2024-09-12 17:02:26,490][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.33024489879608154
+
+[2024-09-12 17:02:26,501][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0004522688686847687
+[2024-09-12 17:02:26,501][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.3262031674385071
+
+[2024-09-12 17:02:26,514][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0003890283405780792
+[2024-09-12 17:02:26,514][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.321844220161438
+
+[2024-09-12 17:02:26,524][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0003471262753009796
+[2024-09-12 17:02:26,524][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.31749069690704346
+
+[2024-09-12 17:02:26,535][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00028966739773750305
+[2024-09-12 17:02:26,535][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.31316518783569336
+
+[2024-09-12 17:02:26,545][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00025968626141548157
+[2024-09-12 17:02:26,546][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.30894219875335693
+
+[2024-09-12 17:02:26,558][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00022845342755317688
+[2024-09-12 17:02:26,558][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.304925799369812
+
+[2024-09-12 17:02:26,569][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00021104887127876282
+[2024-09-12 17:02:26,570][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.3011355996131897
+
+[2024-09-12 17:02:26,589][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00020270422101020813
+[2024-09-12 17:02:26,589][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.2976982593536377
+
+[2024-09-12 17:02:26,608][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001920349895954132
+[2024-09-12 17:02:26,608][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.2946152687072754
+
+[2024-09-12 17:02:26,621][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00019668415188789368
+[2024-09-12 17:02:26,621][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.29170042276382446
+
+[2024-09-12 17:02:26,633][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001958496868610382
+[2024-09-12 17:02:26,633][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.28892600536346436
+
+[2024-09-12 17:02:26,644][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.000207412987947464
+[2024-09-12 17:02:26,644][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.28636693954467773
+
+[2024-09-12 17:02:26,654][modular_addition_simple2.py][INFO] - Epoch [100/10000], Loss: 0.0002
+[2024-09-12 17:02:26,656][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00021516159176826477
+[2024-09-12 17:02:26,656][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.283993661403656
+
+[2024-09-12 17:02:26,668][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00022726133465766907
+[2024-09-12 17:02:26,668][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.28160953521728516
+
+[2024-09-12 17:02:26,680][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00023948028683662415
+[2024-09-12 17:02:26,681][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.27891403436660767
+
+[2024-09-12 17:02:26,692][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00024710968136787415
+[2024-09-12 17:02:26,692][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.27615249156951904
+
+[2024-09-12 17:02:26,702][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0002526529133319855
+[2024-09-12 17:02:26,702][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.27357351779937744
+
+[2024-09-12 17:02:26,714][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00025038793683052063
+[2024-09-12 17:02:26,714][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.2706948518753052
+
+[2024-09-12 17:02:26,727][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0002442486584186554
+[2024-09-12 17:02:26,728][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.2673913240432739
+
+[2024-09-12 17:02:26,739][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00023447349667549133
+[2024-09-12 17:02:26,739][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.2641620635986328
+
+[2024-09-12 17:02:26,753][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00022016838192939758
+[2024-09-12 17:02:26,754][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.26101040840148926
+
+[2024-09-12 17:02:26,765][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00020687654614448547
+[2024-09-12 17:02:26,765][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.257662296295166
+
+[2024-09-12 17:02:26,781][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00019239261746406555
+[2024-09-12 17:02:26,781][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.25426578521728516
+
+[2024-09-12 17:02:26,794][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00018136575818061829
+[2024-09-12 17:02:26,794][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.2510116696357727
+
+[2024-09-12 17:02:26,809][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00017224624752998352
+[2024-09-12 17:02:26,809][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.24783609807491302
+
+[2024-09-12 17:02:26,821][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00016616657376289368
+[2024-09-12 17:02:26,821][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.24473492801189423
+
+[2024-09-12 17:02:26,832][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00016306713223457336
+[2024-09-12 17:02:26,832][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.24180887639522552
+
+[2024-09-12 17:02:26,843][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00016205385327339172
+[2024-09-12 17:02:26,843][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.23900984227657318
+
+[2024-09-12 17:02:26,854][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00016372278332710266
+[2024-09-12 17:02:26,854][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.23622559010982513
+
+[2024-09-12 17:02:26,867][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00016700103878974915
+[2024-09-12 17:02:26,867][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.23356114327907562
+
+[2024-09-12 17:02:26,879][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00017069652676582336
+[2024-09-12 17:02:26,879][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.23107431828975677
+
+[2024-09-12 17:02:26,889][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00017570331692695618
+[2024-09-12 17:02:26,889][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.22854118049144745
+
+[2024-09-12 17:02:26,900][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00017945840954780579
+[2024-09-12 17:02:26,900][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.22590790688991547
+
+[2024-09-12 17:02:26,911][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00018333271145820618
+[2024-09-12 17:02:26,912][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.2233441323041916
+
+[2024-09-12 17:02:26,923][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00018434599041938782
+[2024-09-12 17:02:26,923][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.22078262269496918
+
+[2024-09-12 17:02:26,935][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00018464401364326477
+[2024-09-12 17:02:26,935][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.21809111535549164
+
+[2024-09-12 17:02:26,945][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00018231943249702454
+[2024-09-12 17:02:26,946][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.21534250676631927
+
+[2024-09-12 17:02:26,957][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00017910078167915344
+[2024-09-12 17:02:26,957][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.21259866654872894
+
+[2024-09-12 17:02:26,970][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00017469003796577454
+[2024-09-12 17:02:26,970][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.20981918275356293
+
+[2024-09-12 17:02:26,981][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00016956403851509094
+[2024-09-12 17:02:26,981][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.2070227712392807
+
+[2024-09-12 17:02:26,993][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00016503408551216125
+[2024-09-12 17:02:26,993][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.2042679637670517
+
+[2024-09-12 17:02:27,007][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001603253185749054
+[2024-09-12 17:02:27,007][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.2015617936849594
+
+[2024-09-12 17:02:27,018][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015728548169136047
+[2024-09-12 17:02:27,018][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.19888834655284882
+
+[2024-09-12 17:02:27,032][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015490129590034485
+[2024-09-12 17:02:27,032][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.19627486169338226
+
+[2024-09-12 17:02:27,048][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015364959836006165
+[2024-09-12 17:02:27,048][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.19375668466091156
+
+[2024-09-12 17:02:27,065][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015353038907051086
+[2024-09-12 17:02:27,065][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.19130323827266693
+
+[2024-09-12 17:02:27,079][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015418604016304016
+[2024-09-12 17:02:27,079][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.18887613713741302
+
+[2024-09-12 17:02:27,093][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015561655163764954
+[2024-09-12 17:02:27,093][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.18648622930049896
+
+[2024-09-12 17:02:27,107][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001570470631122589
+[2024-09-12 17:02:27,108][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.18413715064525604
+
+[2024-09-12 17:02:27,121][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015871599316596985
+[2024-09-12 17:02:27,121][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.18181250989437103
+
+[2024-09-12 17:02:27,133][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001596696674823761
+[2024-09-12 17:02:27,133][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.17948602139949799
+
+[2024-09-12 17:02:27,144][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00016026571393013
+[2024-09-12 17:02:27,144][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.17713449895381927
+
+[2024-09-12 17:02:27,154][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015990808606147766
+[2024-09-12 17:02:27,155][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.17477844655513763
+
+[2024-09-12 17:02:27,167][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001590140163898468
+[2024-09-12 17:02:27,167][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.17244522273540497
+
+[2024-09-12 17:02:27,179][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015752390027046204
+[2024-09-12 17:02:27,179][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1701078861951828
+
+[2024-09-12 17:02:27,190][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015549734234809875
+[2024-09-12 17:02:27,190][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.16775088012218475
+
+[2024-09-12 17:02:27,203][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015317276120185852
+[2024-09-12 17:02:27,203][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.16540805995464325
+
+[2024-09-12 17:02:27,215][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00015090778470039368
+[2024-09-12 17:02:27,215][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.16310535371303558
+
+[2024-09-12 17:02:27,227][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014911964535713196
+[2024-09-12 17:02:27,227][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1608346551656723
+
+[2024-09-12 17:02:27,238][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014739111065864563
+[2024-09-12 17:02:27,238][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.15858124196529388
+
+[2024-09-12 17:02:27,249][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014619901776313782
+[2024-09-12 17:02:27,250][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1563570350408554
+
+[2024-09-12 17:02:27,263][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014530494809150696
+[2024-09-12 17:02:27,263][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.15418647229671478
+
+[2024-09-12 17:02:27,275][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001450665295124054
+[2024-09-12 17:02:27,275][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1520579308271408
+
+[2024-09-12 17:02:27,286][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014494732022285461
+[2024-09-12 17:02:27,286][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1499452441930771
+
+[2024-09-12 17:02:27,297][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014536455273628235
+[2024-09-12 17:02:27,297][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.14786003530025482
+
+[2024-09-12 17:02:27,306][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014554336667060852
+[2024-09-12 17:02:27,306][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1458101123571396
+
+[2024-09-12 17:02:27,317][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001457221806049347
+[2024-09-12 17:02:27,317][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1437726467847824
+
+[2024-09-12 17:02:27,327][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001456625759601593
+[2024-09-12 17:02:27,327][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.14174149930477142
+
+[2024-09-12 17:02:27,342][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014554336667060852
+[2024-09-12 17:02:27,343][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.13972745835781097
+
+[2024-09-12 17:02:27,355][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014494732022285461
+[2024-09-12 17:02:27,355][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1377255767583847
+
+[2024-09-12 17:02:27,369][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014393404126167297
+[2024-09-12 17:02:27,370][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.13572894036769867
+
+[2024-09-12 17:02:27,382][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014280155301094055
+[2024-09-12 17:02:27,382][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1337435096502304
+
+[2024-09-12 17:02:27,393][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014166906476020813
+[2024-09-12 17:02:27,394][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.13177810609340668
+
+[2024-09-12 17:02:27,406][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014035776257514954
+[2024-09-12 17:02:27,406][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.12983296811580658
+
+[2024-09-12 17:02:27,419][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013946369290351868
+[2024-09-12 17:02:27,419][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.12790606915950775
+
+[2024-09-12 17:02:27,431][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013821199536323547
+[2024-09-12 17:02:27,431][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1260049194097519
+
+[2024-09-12 17:02:27,443][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001374371349811554
+[2024-09-12 17:02:27,443][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.12413524091243744
+
+[2024-09-12 17:02:27,455][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001367218792438507
+[2024-09-12 17:02:27,455][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1222909539937973
+
+[2024-09-12 17:02:27,468][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013642385601997375
+[2024-09-12 17:02:27,468][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.12047229707241058
+
+[2024-09-12 17:02:27,481][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001360662281513214
+[2024-09-12 17:02:27,481][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.11868344247341156
+
+[2024-09-12 17:02:27,496][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013576820492744446
+[2024-09-12 17:02:27,496][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.11691610515117645
+
+[2024-09-12 17:02:27,508][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001355297863483429
+[2024-09-12 17:02:27,508][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.115165576338768
+
+[2024-09-12 17:02:27,522][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013541057705879211
+[2024-09-12 17:02:27,523][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.11343829333782196
+
+[2024-09-12 17:02:27,534][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.000134933739900589
+[2024-09-12 17:02:27,534][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.11172948777675629
+
+[2024-09-12 17:02:27,547][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013451650738716125
+[2024-09-12 17:02:27,547][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.11003033816814423
+
+[2024-09-12 17:02:27,559][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013403967022895813
+[2024-09-12 17:02:27,559][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.10834650695323944
+
+[2024-09-12 17:02:27,570][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013326480984687805
+[2024-09-12 17:02:27,570][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.10668335855007172
+
+[2024-09-12 17:02:27,580][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013260915875434875
+[2024-09-12 17:02:27,580][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.10503600537776947
+
+[2024-09-12 17:02:27,591][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013195350766181946
+[2024-09-12 17:02:27,591][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.10340313613414764
+
+[2024-09-12 17:02:27,603][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013117864727973938
+[2024-09-12 17:02:27,603][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.1017911285161972
+
+[2024-09-12 17:02:27,614][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001303441822528839
+[2024-09-12 17:02:27,614][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.10020230710506439
+
+[2024-09-12 17:02:27,624][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012974813580513
+[2024-09-12 17:02:27,625][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.09863393008708954
+
+[2024-09-12 17:02:27,636][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001291520893573761
+[2024-09-12 17:02:27,636][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.09708504378795624
+
+[2024-09-12 17:02:27,648][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012873485684394836
+[2024-09-12 17:02:27,648][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.09555934369564056
+
+[2024-09-12 17:02:27,658][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012813881039619446
+[2024-09-12 17:02:27,659][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.09405575692653656
+
+[2024-09-12 17:02:27,671][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001278407871723175
+[2024-09-12 17:02:27,671][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0925707072019577
+
+[2024-09-12 17:02:27,683][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012748315930366516
+[2024-09-12 17:02:27,684][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0911044329404831
+
+[2024-09-12 17:02:27,697][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012706592679023743
+[2024-09-12 17:02:27,698][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.08965794742107391
+
+[2024-09-12 17:02:27,712][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001265294849872589
+[2024-09-12 17:02:27,712][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0882285088300705
+
+[2024-09-12 17:02:27,727][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012623146176338196
+[2024-09-12 17:02:27,728][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.08681522309780121
+
+[2024-09-12 17:02:27,742][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012569501996040344
+[2024-09-12 17:02:27,742][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.08541898429393768
+
+[2024-09-12 17:02:27,754][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012515857815742493
+[2024-09-12 17:02:27,754][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0840398520231247
+
+[2024-09-12 17:02:27,767][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001246817409992218
+[2024-09-12 17:02:27,767][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.08267711102962494
+
+[2024-09-12 17:02:27,779][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012396648526191711
+[2024-09-12 17:02:27,779][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0813320130109787
+
+[2024-09-12 17:02:27,795][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001234300434589386
+[2024-09-12 17:02:27,795][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.08000431954860687
+
+[2024-09-12 17:02:27,808][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012295320630073547
+[2024-09-12 17:02:27,808][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.07869432866573334
+
+[2024-09-12 17:02:27,820][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012235715985298157
+[2024-09-12 17:02:27,820][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.07740305364131927
+
+[2024-09-12 17:02:27,834][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012188032269477844
+[2024-09-12 17:02:27,834][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.07613043487071991
+
+[2024-09-12 17:02:27,850][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012140348553657532
+[2024-09-12 17:02:27,850][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.07487522065639496
+
+[2024-09-12 17:02:27,864][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012104585766792297
+[2024-09-12 17:02:27,864][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.07363753020763397
+
+[2024-09-12 17:02:27,878][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012050941586494446
+[2024-09-12 17:02:27,879][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.07241813838481903
+
+[2024-09-12 17:02:27,892][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00012015178799629211
+[2024-09-12 17:02:27,892][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.07121579349040985
+
+[2024-09-12 17:02:27,903][modular_addition_simple2.py][INFO] - Epoch [200/10000], Loss: 0.0001
+[2024-09-12 17:02:28,169][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/8.617714047431946e-05
+[2024-09-12 17:02:28,169][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.011169720441102982
+
+[2024-09-12 17:02:28,179][modular_addition_simple2.py][INFO] - Epoch [300/10000], Loss: 0.0001
+[2024-09-12 17:02:28,453][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/6.30505383014679e-05
+[2024-09-12 17:02:28,454][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.001915622502565384
+
+[2024-09-12 17:02:28,465][modular_addition_simple2.py][INFO] - Epoch [400/10000], Loss: 0.0001
+[2024-09-12 17:02:28,720][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/4.814937710762024e-05
+[2024-09-12 17:02:28,720][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0006835348904132843
+
+[2024-09-12 17:02:28,729][modular_addition_simple2.py][INFO] - Epoch [500/10000], Loss: 0.0000
+[2024-09-12 17:02:28,977][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.3546239137649536e-05
+[2024-09-12 17:02:28,977][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00040088966488838196
+
+[2024-09-12 17:02:28,987][modular_addition_simple2.py][INFO] - Epoch [600/10000], Loss: 0.0000
+[2024-09-12 17:02:29,257][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.485754132270813e-05
+[2024-09-12 17:02:29,258][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00030164793133735657
+
+[2024-09-12 17:02:29,268][modular_addition_simple2.py][INFO] - Epoch [700/10000], Loss: 0.0000
+[2024-09-12 17:02:29,513][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.4128705263137817e-05
+[2024-09-12 17:02:29,514][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.000226486474275589
+
+[2024-09-12 17:02:29,524][modular_addition_simple2.py][INFO] - Epoch [800/10000], Loss: 0.0000
+[2024-09-12 17:02:29,783][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0003141649067401886
+[2024-09-12 17:02:29,783][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0004598982632160187
+
+[2024-09-12 17:02:29,793][modular_addition_simple2.py][INFO] - Epoch [900/10000], Loss: 0.0003
+[2024-09-12 17:02:30,030][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.341344952583313e-05
+[2024-09-12 17:02:30,031][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00016181543469429016
+
+[2024-09-12 17:02:30,041][modular_addition_simple2.py][INFO] - Epoch [1000/10000], Loss: 0.0000
+[2024-09-12 17:02:30,285][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/5.846098065376282e-05
+[2024-09-12 17:02:30,285][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00015978887677192688
+
+[2024-09-12 17:02:30,294][modular_addition_simple2.py][INFO] - Epoch [1100/10000], Loss: 0.0001
+[2024-09-12 17:02:30,541][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.1804124116897583e-05
+[2024-09-12 17:02:30,541][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0001246817409992218
+
+[2024-09-12 17:02:30,550][modular_addition_simple2.py][INFO] - Epoch [1200/10000], Loss: 0.0000
+[2024-09-12 17:02:30,777][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/8.683279156684875e-05
+[2024-09-12 17:02:30,778][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00019388273358345032
+
+[2024-09-12 17:02:30,789][modular_addition_simple2.py][INFO] - Epoch [1300/10000], Loss: 0.0001
+[2024-09-12 17:02:31,040][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/9.851530194282532e-05
+[2024-09-12 17:02:31,040][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00015466287732124329
+
+[2024-09-12 17:02:31,053][modular_addition_simple2.py][INFO] - Epoch [1400/10000], Loss: 0.0001
+[2024-09-12 17:02:31,301][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.520158886909485e-05
+[2024-09-12 17:02:31,302][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00011162832379341125
+
+[2024-09-12 17:02:31,312][modular_addition_simple2.py][INFO] - Epoch [1500/10000], Loss: 0.0000
+[2024-09-12 17:02:31,549][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00033478811383247375
+[2024-09-12 17:02:31,550][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00034807994961738586
+
+[2024-09-12 17:02:31,563][modular_addition_simple2.py][INFO] - Epoch [1600/10000], Loss: 0.0003
+[2024-09-12 17:02:31,823][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/4.034116864204407e-05
+[2024-09-12 17:02:31,824][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00013785436749458313
+
+[2024-09-12 17:02:31,834][modular_addition_simple2.py][INFO] - Epoch [1700/10000], Loss: 0.0000
+[2024-09-12 17:02:32,082][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/6.853416562080383e-05
+[2024-09-12 17:02:32,082][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00015382841229438782
+
+[2024-09-12 17:02:32,093][modular_addition_simple2.py][INFO] - Epoch [1800/10000], Loss: 0.0001
+[2024-09-12 17:02:32,346][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.2996217012405396e-05
+[2024-09-12 17:02:32,347][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/9.046867489814758e-05
+
+[2024-09-12 17:02:32,357][modular_addition_simple2.py][INFO] - Epoch [1900/10000], Loss: 0.0000
+[2024-09-12 17:02:32,601][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.0731240510940552e-05
+[2024-09-12 17:02:32,601][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/7.342174649238586e-05
+
+[2024-09-12 17:02:32,611][modular_addition_simple2.py][INFO] - Epoch [2000/10000], Loss: 0.0000
+[2024-09-12 17:02:32,850][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.621486783027649e-05
+[2024-09-12 17:02:32,850][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/7.145479321479797e-05
+
+[2024-09-12 17:02:32,860][modular_addition_simple2.py][INFO] - Epoch [2100/10000], Loss: 0.0000
+[2024-09-12 17:02:33,124][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/4.409626126289368e-05
+[2024-09-12 17:02:33,124][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/7.711723446846008e-05
+
+[2024-09-12 17:02:33,135][modular_addition_simple2.py][INFO] - Epoch [2200/10000], Loss: 0.0000
+[2024-09-12 17:02:33,382][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.6916543245315552e-05
+[2024-09-12 17:02:33,382][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.750730633735657e-05
+
+[2024-09-12 17:02:33,397][modular_addition_simple2.py][INFO] - Epoch [2300/10000], Loss: 0.0000
+[2024-09-12 17:02:33,693][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0003051646053791046
+[2024-09-12 17:02:33,694][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0004063136875629425
+
+[2024-09-12 17:02:33,706][modular_addition_simple2.py][INFO] - Epoch [2400/10000], Loss: 0.0003
+[2024-09-12 17:02:33,943][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.2161751985549927e-05
+[2024-09-12 17:02:33,943][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/6.400421261787415e-05
+
+[2024-09-12 17:02:33,953][modular_addition_simple2.py][INFO] - Epoch [2500/10000], Loss: 0.0000
+[2024-09-12 17:02:34,193][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0004573352634906769
+[2024-09-12 17:02:34,194][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0005623586475849152
+
+[2024-09-12 17:02:34,208][modular_addition_simple2.py][INFO] - Epoch [2600/10000], Loss: 0.0005
+[2024-09-12 17:02:34,466][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/6.150081753730774e-05
+[2024-09-12 17:02:34,467][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/9.172037243843079e-05
+
+[2024-09-12 17:02:34,475][modular_addition_simple2.py][INFO] - Epoch [2700/10000], Loss: 0.0001
+[2024-09-12 17:02:34,710][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/4.701688885688782e-05
+[2024-09-12 17:02:34,711][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/7.467344403266907e-05
+
+[2024-09-12 17:02:34,721][modular_addition_simple2.py][INFO] - Epoch [2800/10000], Loss: 0.0000
+[2024-09-12 17:02:34,959][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.8943101167678833e-05
+[2024-09-12 17:02:34,960][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.7268887758255005e-05
+
+[2024-09-12 17:02:34,972][modular_addition_simple2.py][INFO] - Epoch [2900/10000], Loss: 0.0000
+[2024-09-12 17:02:35,231][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.781061291694641e-05
+[2024-09-12 17:02:35,232][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.0712376832962036e-05
+
+[2024-09-12 17:02:35,241][modular_addition_simple2.py][INFO] - Epoch [3000/10000], Loss: 0.0000
+[2024-09-12 17:02:35,481][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/4.64804470539093e-05
+[2024-09-12 17:02:35,482][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/7.592514157295227e-05
+
+[2024-09-12 17:02:35,491][modular_addition_simple2.py][INFO] - Epoch [3100/10000], Loss: 0.0000
+[2024-09-12 17:02:35,749][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0003673918545246124
+[2024-09-12 17:02:35,750][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00044362619519233704
+
+[2024-09-12 17:02:35,762][modular_addition_simple2.py][INFO] - Epoch [3200/10000], Loss: 0.0004
+[2024-09-12 17:02:35,985][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.0015984773635864e-05
+[2024-09-12 17:02:35,986][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.4288655519485474e-05
+
+[2024-09-12 17:02:35,996][modular_addition_simple2.py][INFO] - Epoch [3300/10000], Loss: 0.0000
+[2024-09-12 17:02:36,244][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.572445034980774e-05
+[2024-09-12 17:02:36,245][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.4990330934524536e-05
+
+[2024-09-12 17:02:36,257][modular_addition_simple2.py][INFO] - Epoch [3400/10000], Loss: 0.0000
+[2024-09-12 17:02:36,549][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.473833203315735e-05
+[2024-09-12 17:02:36,549][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/7.020309567451477e-05
+
+[2024-09-12 17:02:36,559][modular_addition_simple2.py][INFO] - Epoch [3500/10000], Loss: 0.0000
+[2024-09-12 17:02:36,803][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/5.232170224189758e-05
+[2024-09-12 17:02:36,803][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/7.431581616401672e-05
+
+[2024-09-12 17:02:36,814][modular_addition_simple2.py][INFO] - Epoch [3600/10000], Loss: 0.0001
+[2024-09-12 17:02:37,076][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/4.636123776435852e-05
+[2024-09-12 17:02:37,076][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/8.617714047431946e-05
+
+[2024-09-12 17:02:37,086][modular_addition_simple2.py][INFO] - Epoch [3700/10000], Loss: 0.0000
+[2024-09-12 17:02:37,324][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00018017366528511047
+[2024-09-12 17:02:37,325][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00019668415188789368
+
+[2024-09-12 17:02:37,335][modular_addition_simple2.py][INFO] - Epoch [3800/10000], Loss: 0.0002
+[2024-09-12 17:02:37,575][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.6751309633255005e-05
+[2024-09-12 17:02:37,576][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/6.394460797309875e-05
+
+[2024-09-12 17:02:37,587][modular_addition_simple2.py][INFO] - Epoch [3900/10000], Loss: 0.0000
+[2024-09-12 17:02:37,853][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.4843961000442505e-05
+[2024-09-12 17:02:37,854][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/6.090477108955383e-05
+
+[2024-09-12 17:02:37,863][modular_addition_simple2.py][INFO] - Epoch [4000/10000], Loss: 0.0000
+[2024-09-12 17:02:38,083][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.6168843507766724e-05
+[2024-09-12 17:02:38,084][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/6.978586316108704e-05
+
+[2024-09-12 17:02:38,093][modular_addition_simple2.py][INFO] - Epoch [4100/10000], Loss: 0.0000
+[2024-09-12 17:02:38,363][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.551319241523743e-05
+[2024-09-12 17:02:38,364][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/6.859377026557922e-05
+
+[2024-09-12 17:02:38,376][modular_addition_simple2.py][INFO] - Epoch [4200/10000], Loss: 0.0000
+[2024-09-12 17:02:38,612][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00016551092267036438
+[2024-09-12 17:02:38,613][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0001812465488910675
+
+[2024-09-12 17:02:38,622][modular_addition_simple2.py][INFO] - Epoch [4300/10000], Loss: 0.0002
+[2024-09-12 17:02:38,860][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/8.069351315498352e-05
+[2024-09-12 17:02:38,861][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00010048225522041321
+
+[2024-09-12 17:02:38,871][modular_addition_simple2.py][INFO] - Epoch [4400/10000], Loss: 0.0001
+[2024-09-12 17:02:39,139][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.938749432563782e-05
+[2024-09-12 17:02:39,140][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/7.00242817401886e-05
+
+[2024-09-12 17:02:39,150][modular_addition_simple2.py][INFO] - Epoch [4500/10000], Loss: 0.0000
+[2024-09-12 17:02:39,396][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.5426427125930786e-05
+[2024-09-12 17:02:39,396][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.6778470277786255e-05
+
+[2024-09-12 17:02:39,409][modular_addition_simple2.py][INFO] - Epoch [4600/10000], Loss: 0.0000
+[2024-09-12 17:02:39,700][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.5486031770706177e-05
+[2024-09-12 17:02:39,701][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.445388913154602e-05
+
+[2024-09-12 17:02:39,712][modular_addition_simple2.py][INFO] - Epoch [4700/10000], Loss: 0.0000
+[2024-09-12 17:02:39,952][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.162531018257141e-05
+[2024-09-12 17:02:39,953][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.101040005683899e-05
+
+[2024-09-12 17:02:39,962][modular_addition_simple2.py][INFO] - Epoch [4800/10000], Loss: 0.0000
+[2024-09-12 17:02:40,190][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.110244870185852e-05
+[2024-09-12 17:02:40,191][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/6.561353802680969e-05
+
+[2024-09-12 17:02:40,208][modular_addition_simple2.py][INFO] - Epoch [4900/10000], Loss: 0.0000
+[2024-09-12 17:02:40,471][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.6512891054153442e-05
+[2024-09-12 17:02:40,471][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.226209759712219e-05
+
+[2024-09-12 17:02:40,484][modular_addition_simple2.py][INFO] - Epoch [5000/10000], Loss: 0.0000
+[2024-09-12 17:02:40,729][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.7122517824172974e-05
+[2024-09-12 17:02:40,729][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/6.853416562080383e-05
+
+[2024-09-12 17:02:40,739][modular_addition_simple2.py][INFO] - Epoch [5100/10000], Loss: 0.0000
+[2024-09-12 17:02:41,002][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.7360936403274536e-05
+[2024-09-12 17:02:41,003][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/6.698444485664368e-05
+
+[2024-09-12 17:02:41,013][modular_addition_simple2.py][INFO] - Epoch [5200/10000], Loss: 0.0000
+[2024-09-12 17:02:41,257][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.2221356630325317e-05
+[2024-09-12 17:02:41,258][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.399063229560852e-05
+
+[2024-09-12 17:02:41,269][modular_addition_simple2.py][INFO] - Epoch [5300/10000], Loss: 0.0000
+[2024-09-12 17:02:41,510][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/4.278495907783508e-05
+[2024-09-12 17:02:41,510][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/6.43022358417511e-05
+
+[2024-09-12 17:02:41,521][modular_addition_simple2.py][INFO] - Epoch [5400/10000], Loss: 0.0000
+[2024-09-12 17:02:41,796][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/7.169321179389954e-05
+[2024-09-12 17:02:41,796][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00010697916150093079
+
+[2024-09-12 17:02:41,807][modular_addition_simple2.py][INFO] - Epoch [5500/10000], Loss: 0.0001
+[2024-09-12 17:02:42,053][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013839080929756165
+[2024-09-12 17:02:42,053][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00019477680325508118
+
+[2024-09-12 17:02:42,064][modular_addition_simple2.py][INFO] - Epoch [5600/10000], Loss: 0.0001
+[2024-09-12 17:02:42,323][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00034295395016670227
+[2024-09-12 17:02:42,323][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0004627592861652374
+
+[2024-09-12 17:02:42,333][modular_addition_simple2.py][INFO] - Epoch [5700/10000], Loss: 0.0003
+[2024-09-12 17:02:42,571][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.3399869203567505e-05
+[2024-09-12 17:02:42,571][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.153326153755188e-05
+
+[2024-09-12 17:02:42,581][modular_addition_simple2.py][INFO] - Epoch [5800/10000], Loss: 0.0000
+[2024-09-12 17:02:42,840][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.9850751161575317e-05
+[2024-09-12 17:02:42,840][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.661323666572571e-05
+
+[2024-09-12 17:02:42,853][modular_addition_simple2.py][INFO] - Epoch [5900/10000], Loss: 0.0000
+[2024-09-12 17:02:43,098][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/7.801130414009094e-05
+[2024-09-12 17:02:43,098][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00012378767132759094
+
+[2024-09-12 17:02:43,109][modular_addition_simple2.py][INFO] - Epoch [6000/10000], Loss: 0.0001
+[2024-09-12 17:02:43,348][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.4843961000442505e-05
+[2024-09-12 17:02:43,349][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.989149212837219e-05
+
+[2024-09-12 17:02:43,358][modular_addition_simple2.py][INFO] - Epoch [6100/10000], Loss: 0.0000
+[2024-09-12 17:02:43,630][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00013541057705879211
+[2024-09-12 17:02:43,630][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00015508010983467102
+
+[2024-09-12 17:02:43,639][modular_addition_simple2.py][INFO] - Epoch [6200/10000], Loss: 0.0001
+[2024-09-12 17:02:43,870][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/8.826330304145813e-05
+[2024-09-12 17:02:43,871][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00012515857815742493
+
+[2024-09-12 17:02:43,881][modular_addition_simple2.py][INFO] - Epoch [6300/10000], Loss: 0.0001
+[2024-09-12 17:02:44,120][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/9.934976696968079e-05
+[2024-09-12 17:02:44,121][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00011943653225898743
+
+[2024-09-12 17:02:44,130][modular_addition_simple2.py][INFO] - Epoch [6400/10000], Loss: 0.0001
+[2024-09-12 17:02:44,379][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.42479145526886e-05
+[2024-09-12 17:02:44,380][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.8282166719436646e-05
+
+[2024-09-12 17:02:44,389][modular_addition_simple2.py][INFO] - Epoch [6500/10000], Loss: 0.0000
+[2024-09-12 17:02:44,628][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.7452985048294067e-05
+[2024-09-12 17:02:44,629][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.4036656618118286e-05
+
+[2024-09-12 17:02:44,638][modular_addition_simple2.py][INFO] - Epoch [6600/10000], Loss: 0.0000
+[2024-09-12 17:02:44,899][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00011353567242622375
+[2024-09-12 17:02:44,899][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0001621730625629425
+
+[2024-09-12 17:02:44,909][modular_addition_simple2.py][INFO] - Epoch [6700/10000], Loss: 0.0001
+[2024-09-12 17:02:45,141][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.6989728212356567e-05
+[2024-09-12 17:02:45,141][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.965307354927063e-05
+
+[2024-09-12 17:02:45,155][modular_addition_simple2.py][INFO] - Epoch [6800/10000], Loss: 0.0000
+[2024-09-12 17:02:45,428][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.000240374356508255
+[2024-09-12 17:02:45,428][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00025944784283638
+
+[2024-09-12 17:02:45,440][modular_addition_simple2.py][INFO] - Epoch [6900/10000], Loss: 0.0002
+[2024-09-12 17:02:45,729][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00037436559796333313
+[2024-09-12 17:02:45,729][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00038253143429756165
+
+[2024-09-12 17:02:45,739][modular_addition_simple2.py][INFO] - Epoch [7000/10000], Loss: 0.0004
+[2024-09-12 17:02:46,019][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.6288052797317505e-05
+[2024-09-12 17:02:46,019][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/6.901100277900696e-05
+
+[2024-09-12 17:02:46,029][modular_addition_simple2.py][INFO] - Epoch [7100/10000], Loss: 0.0000
+[2024-09-12 17:02:46,294][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0007232911884784698
+[2024-09-12 17:02:46,295][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0008348114788532257
+
+[2024-09-12 17:02:46,305][modular_addition_simple2.py][INFO] - Epoch [7200/10000], Loss: 0.0007
+[2024-09-12 17:02:46,548][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001863129436969757
+[2024-09-12 17:02:46,548][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0002398379147052765
+
+[2024-09-12 17:02:46,560][modular_addition_simple2.py][INFO] - Epoch [7300/10000], Loss: 0.0002
+[2024-09-12 17:02:46,819][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/6.352737545967102e-05
+[2024-09-12 17:02:46,820][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/9.011104702949524e-05
+
+[2024-09-12 17:02:46,832][modular_addition_simple2.py][INFO] - Epoch [7400/10000], Loss: 0.0001
+[2024-09-12 17:02:47,093][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.387670636177063e-05
+[2024-09-12 17:02:47,093][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.26657497882843e-05
+
+[2024-09-12 17:02:47,103][modular_addition_simple2.py][INFO] - Epoch [7500/10000], Loss: 0.0000
+[2024-09-12 17:02:47,357][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00035260990262031555
+[2024-09-12 17:02:47,358][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00044303014874458313
+
+[2024-09-12 17:02:47,368][modular_addition_simple2.py][INFO] - Epoch [7600/10000], Loss: 0.0004
+[2024-09-12 17:02:47,633][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.384426236152649e-05
+[2024-09-12 17:02:47,633][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.583837628364563e-05
+
+[2024-09-12 17:02:47,643][modular_addition_simple2.py][INFO] - Epoch [7700/10000], Loss: 0.0000
+[2024-09-12 17:02:47,886][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.5962868928909302e-05
+[2024-09-12 17:02:47,887][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.558637738227844e-05
+
+[2024-09-12 17:02:47,900][modular_addition_simple2.py][INFO] - Epoch [7800/10000], Loss: 0.0000
+[2024-09-12 17:02:48,192][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/5.1546841859817505e-05
+[2024-09-12 17:02:48,193][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/8.850172162055969e-05
+
+[2024-09-12 17:02:48,204][modular_addition_simple2.py][INFO] - Epoch [7900/10000], Loss: 0.0001
+[2024-09-12 17:02:48,440][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00014602020382881165
+[2024-09-12 17:02:48,441][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00016431882977485657
+
+[2024-09-12 17:02:48,451][modular_addition_simple2.py][INFO] - Epoch [8000/10000], Loss: 0.0001
+[2024-09-12 17:02:48,684][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.538040280342102e-05
+[2024-09-12 17:02:48,684][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.90434467792511e-05
+
+[2024-09-12 17:02:48,694][modular_addition_simple2.py][INFO] - Epoch [8100/10000], Loss: 0.0000
+[2024-09-12 17:02:48,967][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.6380101442337036e-05
+[2024-09-12 17:02:48,968][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.755333065986633e-05
+
+[2024-09-12 17:02:48,979][modular_addition_simple2.py][INFO] - Epoch [8200/10000], Loss: 0.0000
+[2024-09-12 17:02:49,228][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.7154961824417114e-05
+[2024-09-12 17:02:49,229][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.350021481513977e-05
+
+[2024-09-12 17:02:49,239][modular_addition_simple2.py][INFO] - Epoch [8300/10000], Loss: 0.0000
+[2024-09-12 17:02:49,511][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/4.33214008808136e-05
+[2024-09-12 17:02:49,512][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/6.966665387153625e-05
+
+[2024-09-12 17:02:49,524][modular_addition_simple2.py][INFO] - Epoch [8400/10000], Loss: 0.0000
+[2024-09-12 17:02:49,777][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/9.577348828315735e-05
+[2024-09-12 17:02:49,777][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00014602020382881165
+
+[2024-09-12 17:02:49,788][modular_addition_simple2.py][INFO] - Epoch [8500/10000], Loss: 0.0001
+[2024-09-12 17:02:50,038][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.861263394355774e-05
+[2024-09-12 17:02:50,039][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/7.181242108345032e-05
+
+[2024-09-12 17:02:50,052][modular_addition_simple2.py][INFO] - Epoch [8600/10000], Loss: 0.0000
+[2024-09-12 17:02:50,314][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00010191276669502258
+[2024-09-12 17:02:50,315][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.0001284368336200714
+
+[2024-09-12 17:02:50,325][modular_addition_simple2.py][INFO] - Epoch [8700/10000], Loss: 0.0001
+[2024-09-12 17:02:50,573][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.4591962099075317e-05
+[2024-09-12 17:02:50,574][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.224851727485657e-05
+
+[2024-09-12 17:02:50,585][modular_addition_simple2.py][INFO] - Epoch [8800/10000], Loss: 0.0000
+[2024-09-12 17:02:50,839][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.483038067817688e-05
+[2024-09-12 17:02:50,839][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.2069703340530396e-05
+
+[2024-09-12 17:02:50,850][modular_addition_simple2.py][INFO] - Epoch [8900/10000], Loss: 0.0000
+[2024-09-12 17:02:51,102][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/6.668642163276672e-05
+[2024-09-12 17:02:51,102][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00011425092816352844
+
+[2024-09-12 17:02:51,113][modular_addition_simple2.py][INFO] - Epoch [9000/10000], Loss: 0.0001
+[2024-09-12 17:02:51,405][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.5128403902053833e-05
+[2024-09-12 17:02:51,405][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/3.932788968086243e-05
+
+[2024-09-12 17:02:51,416][modular_addition_simple2.py][INFO] - Epoch [9100/10000], Loss: 0.0000
+[2024-09-12 17:02:51,656][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/8.701160550117493e-05
+[2024-09-12 17:02:51,656][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00010829046368598938
+
+[2024-09-12 17:02:51,667][modular_addition_simple2.py][INFO] - Epoch [9200/10000], Loss: 0.0001
+[2024-09-12 17:02:51,915][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00036667659878730774
+[2024-09-12 17:02:51,916][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00037609413266181946
+
+[2024-09-12 17:02:51,926][modular_addition_simple2.py][INFO] - Epoch [9300/10000], Loss: 0.0004
+[2024-09-12 17:02:52,192][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.3459473848342896e-05
+[2024-09-12 17:02:52,193][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.1116029024124146e-05
+
+[2024-09-12 17:02:52,204][modular_addition_simple2.py][INFO] - Epoch [9400/10000], Loss: 0.0000
+[2024-09-12 17:02:52,445][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.0001138933002948761
+[2024-09-12 17:02:52,445][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00016080215573310852
+
+[2024-09-12 17:02:52,456][modular_addition_simple2.py][INFO] - Epoch [9500/10000], Loss: 0.0001
+[2024-09-12 17:02:52,718][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/0.00016449764370918274
+[2024-09-12 17:02:52,719][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/0.00024949386715888977
+
+[2024-09-12 17:02:52,736][modular_addition_simple2.py][INFO] - Epoch [9600/10000], Loss: 0.0002
+[2024-09-12 17:02:52,963][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/2.5797635316848755e-05
+[2024-09-12 17:02:52,964][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.898384213447571e-05
+
+[2024-09-12 17:02:52,974][modular_addition_simple2.py][INFO] - Epoch [9700/10000], Loss: 0.0000
+[2024-09-12 17:02:53,209][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/1.3519078493118286e-05
+[2024-09-12 17:02:53,209][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/4.1056424379348755e-05
+
+[2024-09-12 17:02:53,219][modular_addition_simple2.py][INFO] - Epoch [9800/10000], Loss: 0.0000
+[2024-09-12 17:02:53,477][modular_addition_simple2.py][INFO] - Train Accuracy/Loss: 1.0/3.116205334663391e-05
+[2024-09-12 17:02:53,477][modular_addition_simple2.py][INFO] - Test Accuracy/Loss: 1.0/5.685165524482727e-05
+
+[2024-09-12 17:02:53,488][modular_addition_simple2.py][INFO] - Epoch [9900/10000], Loss: 0.0000
+[2024-09-12 17:02:53,736][modular_addition_simple2.py][INFO] - Post-Processing data ...
+[2024-09-12 17:02:54,582][modular_addition_simple2.py][INFO] - Saving ... 
+[2024-09-12 17:02:55,382][submitit][INFO] - Job completed successfully
