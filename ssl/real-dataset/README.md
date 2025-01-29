@@ -188,7 +188,7 @@ python modular_addition_simple2.py -m activation=sqr loss_func=mse num_epochs=10
 For the specific experiment of Fig. 3 and Fig. 4/Tbl. 2/Fig. 5, we have provided logs to fully reproduce the experiments. For Fig. 3, please check [here](cogo/modular_addition_simple2_fig3.log). For Fig. 4/Tbl. 2/Fig. 5, please check [here](./cogo/sweep.log). 
 
 Given the resulting folder, you could run the following scripts to load and visualize the results.
-+ Use `python draw_dyn_fig3.py [exp_folder]` to draw Fig. 3 for one specific experiment. To reproduce the experiment, the log for that specific figure (hyperparameters are included) is at . 
++ Use `python draw_dyn_fig3.py [exp_folder]` to draw Fig. 3 for one specific experiment. To reproduce the experiment, the log for that specific figure (hyperparameters are included) is [here](cogo/sweep.log). 
 + Use `python sol_distri.py [exp_sweep_folder]` to draw Fig. 4. 
 + Use `python factorize_sol.py [exp_sweep_folder]` to draw Tbl. 2 and Fig. 5.
 
