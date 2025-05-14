@@ -1,0 +1,21 @@
+seed: 0
+M: 127
+hidden_size: 512
+learning_rate: 0.001
+
+# Adam or sgd
+optim: adam 
+
+# sqr or relu
+activation: sqr 
+num_epochs: 3000
+test_size: 0.7
+weight_decay: 1e-4
+use_bn: false
+
+# nll or mse
+loss_func: "nll"
+save_interval: 1000
+init_save_range: 200
+eval_interval: 100
+normalize: false
