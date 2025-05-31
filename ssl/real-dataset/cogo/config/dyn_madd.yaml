@@ -19,3 +19,5 @@ save_interval: 1000
 init_save_range: 200
 eval_interval: 100
 normalize: false
+
+set_weight_reg : 1e-3

@@ -57,7 +57,7 @@ def test_model(model, X_test, y_test, loss_type):
 
 # Define the neural network model
 class ModularAdditionNN(nn.Module):
-    def __init__(self, M, hidden_size, activation="sqr", use_bn=False):
+    def __init__(self, M, hidden_size, activation="sqr", use_bn=False, inverse_mat_layer_reg=None):
         super(ModularAdditionNN, self).__init__()
         self.embedding = nn.Embedding(M, M).requires_grad_(False)
         with torch.no_grad():
@@ -76,6 +76,7 @@ class ModularAdditionNN(nn.Module):
         self.relu = nn.ReLU()
         self.activation = activation
         self.M = M
+        self.inverse_mat_layer_reg = inverse_mat_layer_reg
     
     def forward(self, x):
         y1 = self.embedding(x[:,0])
@@ -91,7 +92,8 @@ class ModularAdditionNN(nn.Module):
             x = self.relu(x)
         else:
             raise RuntimeError(f"Unknown activation = {self.activation}")
-            
+
+        self.x_before_c = x.clone()
         return [self.layerc(x)]
 
     def normalize(self):
@@ -99,6 +101,21 @@ class ModularAdditionNN(nn.Module):
             self.layera.weight[:] -= self.layera.weight.mean(dim=1, keepdim=True) 
             self.layerb.weight[:] -= self.layerb.weight.mean(dim=1, keepdim=True) 
             self.layerc.weight[:] -= self.layerc.weight.mean(dim=0, keepdim=True) 
+
+    def set_weight(self, Y):
+        if self.inverse_mat_layer_reg is None:
+            return
+
+        with torch.no_grad():
+            # Compute the matrix that maps input to target
+            # X [bs, d]
+            # Y [bs, d_out]
+            # we want to find W so that X W = Y, where W = [d, d_out] 
+            # Compute the SVD of input 
+            U, s, Vt = torch.linalg.svd(self.x_before_c, full_matrices=False)
+            # Then we invert to get W.  
+            # 
+            self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) / (s[:,None] + self.inverse_mat_layer_reg))).t()
 
 @hydra.main(config_path="config", config_name="dyn_madd.yaml")
 def main(args):
@@ -132,7 +149,13 @@ def main(args):
     y_test = y_test.cuda()
 
     # Initialize the model, loss function, and optimizer
-    model = ModularAdditionNN(args.M, args.hidden_size, activation=args.activation, use_bn=args.use_bn)
+    if args.set_weight_reg is not None:
+        assert args.loss_func == "mse", "only MSE loss can use set_weight_reg != None" 
+
+    model = ModularAdditionNN(args.M, args.hidden_size, 
+                              activation=args.activation, 
+                              use_bn=args.use_bn, 
+                              inverse_mat_layer_reg=args.set_weight_reg)
 
     model = model.cuda()
 
@@ -182,6 +205,12 @@ def main(args):
 
         if args.normalize:
             model.normalize()
+
+        if args.set_weight_reg is not None:
+            # Get a one hot y_train
+            Y_train = F.one_hot(y_train.squeeze())
+            Y_train = Y_train - 1.0 / args.M
+            model.set_weight(Y_train)
 
         if epoch % args.eval_interval == 0:
             log.info(f'Epoch [{epoch}/{args.num_epochs}], Loss: {loss.item():.4f}')
