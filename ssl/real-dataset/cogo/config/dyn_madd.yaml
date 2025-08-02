@@ -1,5 +1,7 @@
 seed: 0
-M: 127
+# String, can be a number, or a multiplication of multiple numbers, e.g., 2x3x4, 
+# which corresponds to Abelian group Z_2 x Z_3 x Z_4
+M: "127"
 hidden_size: 512
 learning_rate: 0.001
 
@@ -21,3 +23,8 @@ eval_interval: 100
 normalize: false
 
 set_weight_reg : 1e-3
+
+scale_down_top: false
+
+load_dataset_split : null
+load_initial_layerab : null

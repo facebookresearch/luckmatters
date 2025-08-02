@@ -8,7 +8,9 @@ from sklearn.model_selection import train_test_split
 from modular_addition_load import process_one
 
 import hydra
+import itertools
 
+import math
 import logging
 log = logging.getLogger(__file__)
 log.setLevel(logging.INFO)
@@ -16,16 +18,27 @@ log.setLevel(logging.INFO)
 import common_utils
 
 # Define the modular addition function
-def modular_addition(x, y, mod):
-    return (x + y) % mod
+def modular_addition(xs, ys, mods):
+    return tuple( (x + y) % mod for x, y, mod in zip(xs, ys, mods) )
 
 def generate_dataset(M):
+    if isinstance(M, int):
+        orders = [M]
+    else: 
+        orders = [ int(v) for v in M.split("x") ]
+
+    def flattern(xs):
+        return sum( x * order for x, order in zip(xs[1:], orders[:-1]) ) + xs[0]
+
     data = []
-    for x in range(M):
-        for y in range(M):
-            z = modular_addition(x, y, M)
-            data.append((x, y, z))
-    return data
+    for x in itertools.product(*(range(v) for v in orders)):
+        for y in itertools.product(*(range(v) for v in orders)):
+            # 
+            z = modular_addition(x, y, orders)
+            # flattern them
+            data.append((flattern(x), flattern(y), flattern(z)))
+            # print(x, y, z, data[-1])
+    return data, math.prod(orders)
 
 nll_criterion = nn.CrossEntropyLoss().cuda()
 
@@ -78,7 +91,7 @@ class ModularAdditionNN(nn.Module):
         self.M = M
         self.inverse_mat_layer_reg = inverse_mat_layer_reg
     
-    def forward(self, x):
+    def forward(self, x, Y=None):
         y1 = self.embedding(x[:,0])
         y2 = self.embedding(x[:,1]) 
         # x = torch.relu(self.layer1(x))
@@ -93,7 +106,22 @@ class ModularAdditionNN(nn.Module):
         else:
             raise RuntimeError(f"Unknown activation = {self.activation}")
 
-        self.x_before_c = x.clone()
+        self.x_before_layerc = x.clone()
+
+        if self.inverse_mat_layer_reg is not None and Y is not None:
+            with torch.no_grad():
+                # Compute the matrix that maps input to target
+                # X [bs, d]
+                # Y [bs, d_out]
+                # we want to find W so that X W = Y, where W = [d, d_out] 
+                # Compute the SVD of input 
+                U, s, Vt = torch.linalg.svd(x, full_matrices=False)
+                # Then we invert to get W.  
+                # 
+                # self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) / (s[:,None] + self.inverse_mat_layer_reg))).t()
+                reg_diag =  s / (s.pow(2) + self.inverse_mat_layer_reg)
+                self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) * reg_diag[:,None])).t()
+
         return [self.layerc(x)]
 
     def normalize(self):
@@ -102,20 +130,13 @@ class ModularAdditionNN(nn.Module):
             self.layerb.weight[:] -= self.layerb.weight.mean(dim=1, keepdim=True) 
             self.layerc.weight[:] -= self.layerc.weight.mean(dim=0, keepdim=True) 
 
-    def set_weight(self, Y):
-        if self.inverse_mat_layer_reg is None:
-            return
-
+    def scale_down_top(self):
+        # Scale down the top layer
         with torch.no_grad():
-            # Compute the matrix that maps input to target
-            # X [bs, d]
-            # Y [bs, d_out]
-            # we want to find W so that X W = Y, where W = [d, d_out] 
-            # Compute the SVD of input 
-            U, s, Vt = torch.linalg.svd(self.x_before_c, full_matrices=False)
-            # Then we invert to get W.  
-            # 
-            self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) / (s[:,None] + self.inverse_mat_layer_reg))).t()
+            cnorm = self.layerc.weight.norm() 
+            if cnorm > 1:
+                self.layerc.weight[:] /= cnorm
+
 
 @hydra.main(config_path="config", config_name="dyn_madd.yaml")
 def main(args):
@@ -125,7 +146,7 @@ def main(args):
     # torch.manual_seed(args.seed)
 
     # Generate dataset
-    dataset = generate_dataset(args.M)
+    dataset, group_order = generate_dataset(args.M)
     dataset_size = len(dataset)
 
     # Prepare data for training and testing
@@ -140,8 +161,21 @@ def main(args):
 
     y = labels
 
-    # Split the dataset into training and test sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size, random_state=args.seed)
+    if args.load_dataset_split is not None:
+        # Load dataset
+        data = torch.load(args.load_dataset_split)
+        train_indices = data["train_indices"]
+        test_indices = data["test_indices"]
+
+        X_train = X[train_indices, :]
+        y_train = y[train_indices]
+
+        X_test = X[test_indices, :]
+        y_test = y[test_indices]
+    
+    else:
+        # Split the dataset into training and test sets
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size, random_state=args.seed)
 
     X_train = X_train.cuda()
     X_test = X_test.cuda()
@@ -152,10 +186,16 @@ def main(args):
     if args.set_weight_reg is not None:
         assert args.loss_func == "mse", "only MSE loss can use set_weight_reg != None" 
 
-    model = ModularAdditionNN(args.M, args.hidden_size, 
+    model = ModularAdditionNN(group_order, args.hidden_size, 
                               activation=args.activation, 
                               use_bn=args.use_bn, 
                               inverse_mat_layer_reg=args.set_weight_reg)
+
+    if args.load_initial_layerab is not None:
+        state_dict = torch.load(args.load_initial_layerab)
+        with torch.no_grad():
+            model.layera.weight[:] = state_dict["weight"][:, :group_order]
+            model.layerb.weight[:] = state_dict["weight"][:, group_order:]
 
     model = model.cuda()
 
@@ -169,6 +209,10 @@ def main(args):
     # optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=3e-4)
 
     results = []
+
+    # Get a one hot y_train
+    Y_train = F.one_hot(y_train.squeeze())
+    Y_train = Y_train - 1.0 / group_order
 
     # Training loop
     for epoch in range(args.num_epochs):
@@ -195,22 +239,28 @@ def main(args):
         optimizer.zero_grad()
         
         # Forward pass
-        outputs = model(X_train)
+        outputs = model(X_train, Y_train)
+
         # loss = criterion(outputs, y_train)
         loss = compute_loss(outputs, y_train, args.loss_func)
         
         # Backward and optimize
         loss.backward()
+
+        # if epoch % 100 == 0:
+        #     with torch.no_grad():
+        #         print(model.layera.weight.grad.norm())
+        #         print(model.layerb.weight.grad.norm())
+        # import pdb
+        # pdb.set_trace()
+
         optimizer.step()
 
         if args.normalize:
             model.normalize()
 
-        if args.set_weight_reg is not None:
-            # Get a one hot y_train
-            Y_train = F.one_hot(y_train.squeeze())
-            Y_train = Y_train - 1.0 / args.M
-            model.set_weight(Y_train)
+        if args.scale_down_top:
+            model.scale_down_top()
 
         if epoch % args.eval_interval == 0:
             log.info(f'Epoch [{epoch}/{args.num_epochs}], Loss: {loss.item():.4f}')

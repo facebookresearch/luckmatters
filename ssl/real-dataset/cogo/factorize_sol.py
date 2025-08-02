@@ -5,6 +5,7 @@ import glob
 import tqdm
 import argparse
 import matplotlib.pyplot as plt
+from collections import defaultdict
 
 from analyze_util import *
 
@@ -147,7 +148,7 @@ from collections import Counter
 
 # categorize one solution
 # for each node, get their best freq
-def analyze_solution(A, B, C, stats4, stats6, errs4, errs6):
+def analyze_solution(A, B, C):
     d = A.shape[0]
     q = A.shape[1]
 
@@ -156,6 +157,14 @@ def analyze_solution(A, B, C, stats4, stats6, errs4, errs6):
     freq_filter = best_freqs_max > 0.05
     best_freqs = best_freqs[freq_filter].tolist()
     best_freqs_indices = freq_filter.nonzero().squeeze(dim=1).tolist()
+
+    stats4 = defaultdict(list)
+    stats6 = defaultdict(list)
+    stats0 = defaultdict(list)
+    errs4 = []
+    errs6 = []
+
+    stats4["d"] = stats6["d"] = d
     
     for k in range(1, (d-1)//2 + 1):
         indices = [ idx for idx,kk in zip(best_freqs_indices, best_freqs) if k == kk ]
@@ -164,6 +173,12 @@ def analyze_solution(A, B, C, stats4, stats6, errs4, errs6):
         Bk = B[k,indices]
         Ck = C[k,indices]
         q = len(indices)
+
+        print(q)
+
+        if q == 0:
+            stats0["cnt"].append(1)
+            continue
         
         if q not in (6, 4):
             continue
@@ -199,21 +214,97 @@ def analyze_solution(A, B, C, stats4, stats6, errs4, errs6):
             stats[(res1, res2)].append((param1, param2))
             errs.append(err.item())
 
+    return dict(stats4=stats4, stats6=stats6, stats0=stats0, errs4=errs4, errs6=errs6)
+
+def summarize46(s, result = None):
+    if result is None:
+        result = defaultdict(list)
+
+    s4 = s["stats4"]
+    s6 = s["stats6"]
+    s0 = s["stats0"]
+    d = s4["d"]
+
+    result["err_4"].append(torch.Tensor(s["errs4"]).mean())
+    result["err_6"].append(torch.Tensor(s["errs6"]).mean())
+
+    n = (d - 1) // 2
+    
+    n4 = len(s4["cnt"])
+    n6 = len(s6["cnt"])
+    n0 = len(s0["cnt"])
+    
+    result["1nonfact_4"].append(len(s4["non-factorable"]) / (n4 + 1e-8))
+    result["1nonfact_6"].append(len(s6["non-factorable"]) / (n6 + 1e-8))
+    
+    nfact = n4 + n6 - len(s4["non-factorable"]) - len(s6["non-factorable"])
+    
+    n4_4cxi = len(s4[('order-2-4c', 'order-2-xi')])
+    n6_nusyn = len(s6[('order-2-nu', 'order-3-syn')])
+    n6_4csynab = len(s6[('order-2-4c', 'order-3-syn-ab')]) + len(s6[('order-2-4c', 'order-3-syn')])
+    
+    result["sol_4_4cxi"].append(n4_4cxi / (nfact + 1e-8))
+    result["sol_6_nusyn"].append(n6_nusyn / (nfact + 1e-8))
+    result["sol_6_4csynab"].append(n6_4csynab / (nfact + 1e-8))
+    result["sol_others"].append((nfact - n4_4cxi - n6_nusyn - n6_4csynab) / (nfact + 1e-8))
+
+    result["0_n4"].append(n4)
+    result["0_n6"].append(n6)
+    result["0_n0"].append(n0)
+    result["0_non_4_6_0"].append(n - n4 - n6 - n0)
+
+    return result
+
+def print_row(result):
+    rows = ""
+    row_names = ""
+    
+    for k in sorted(result.keys()):
+        result[k] = torch.Tensor(result[k])
+        mean = result[k].mean()
+        std = result[k].std() / math.sqrt(len(result[k]))
+        
+        # if k.startswith("err"):
+        if not k.startswith("0_"):
+            row = f"${mean*100:.2f}${{\\tiny$\\pm {std*100:.2f}$}}"
+        else:
+            row = f"${mean:.2f}${{\\tiny$\\pm {std:.2f}$}}" 
+        # else:
+        #    row = f"${mean:.2f} \pm {std:.2f}$"
+            
+        rows += "& " + row 
+        row_names += "& " + k
+
+    return row_names, rows
+
+def analyze_one(folder, model_index):
+    # try:
+    # Load them
+    # data = torch.load(os.path.join(folder, "data.pth"), map_location="cpu")
+    As, Bs, Cs, ts, _ = load_model_traj(folder, indices=[model_index])
+    stats = analyze_solution(As[:,:,-1], Bs[:,:,-1], Cs[:,:,-1])
+    result = summarize46(stats)
+    row_names, rows = print_row(result)
+    print(row_names)
+    print(rows)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # The root directory after you run the parameter sweep
-    # e.g.,  
-
     parser.add_argument("root", type=str)
+    parser.add_argument("--model_index", type=int, default=4900)
     args = parser.parse_args()
     root = args.root
-    all_cfgs = load_all(root)
+
+    # Check if a root is a exp sweep
+    if os.path.exists(os.path.join(root, ".sweep")):
+        all_cfgs = load_all(root)
+    else:
+        analyze_one(root, args.model_index)
+        sys.exit(0)
 
     q = "512"
     wd = "5e-05"
-
-    from collections import defaultdict
 
     all_stats = defaultdict(lambda: dict(stats4 = defaultdict(list), stats6 = defaultdict(list), errs4 = [], errs6 = []))
 
@@ -222,13 +313,6 @@ if __name__ == "__main__":
         if weight_decay != wd:
             continue
             
-        entry = all_stats[M, seed]
-            
-        stats4 = entry["stats4"]
-        stats6 = entry["stats6"]
-        errs4 = entry["errs4"]
-        errs6 = entry["errs6"]
-        
         for folder in tbl["folder"]:
             print(folder)
             # try:
@@ -236,60 +320,17 @@ if __name__ == "__main__":
             # data = torch.load(os.path.join(folder, "data.pth"), map_location="cpu")
             As, Bs, Cs, ts, _ = load_model_traj(folder, indices=[9900])
 
-            analyze_solution(As[:,:,-1], Bs[:,:,-1], Cs[:,:,-1], stats4, stats6, errs4, errs6)          
+            all_stats[M, seed] = analyze_solution(As[:,:,-1], Bs[:,:,-1], Cs[:,:,-1])
 
     for d in [23, 71, 127]:
         result = defaultdict(list)
-        n = (d - 1) // 2
-        
         for i in range(1,6):
             s = all_stats[(str(d), str(i))]
-            result["err_4"].append(torch.Tensor(s["errs4"]).mean())
-            result["err_6"].append(torch.Tensor(s["errs6"]).mean())
-            
-            s4 = s["stats4"]
-            s6 = s["stats6"]
-            
-            n4 = len(s4["cnt"])
-            n6 = len(s6["cnt"])
-            
-            result["1nonfact_4"].append(len(s4["non-factorable"]) / n4)
-            result["1nonfact_6"].append(len(s6["non-factorable"]) / n6)
-            
-            nfact = n4 + n6 - len(s4["non-factorable"]) - len(s6["non-factorable"])
-            
-            n4_4cxi = len(s4[('order-2-4c', 'order-2-xi')])
-            n6_nusyn = len(s6[('order-2-nu', 'order-3-syn')])
-            n6_4csynab = len(s6[('order-2-4c', 'order-3-syn-ab')]) + len(s6[('order-2-4c', 'order-3-syn')])
-            
-            result["sol_4_4cxi"].append(n4_4cxi / nfact)
-            result["sol_6_nusyn"].append(n6_nusyn / nfact)
-            result["sol_6_4csynab"].append(n6_4csynab / nfact)
-            result["sol_others"].append((nfact - n4_4cxi - n6_nusyn - n6_4csynab) / nfact)
-            
-            result["0_non_46"].append(n - n4 - n6)
+            result = summarize46(s, result) 
              
         # print table 2 in the paper. 
         print(f"d = {d}:")
-        rows = ""
-        row_names = ""
-        
-        for k in sorted(result.keys()):
-            result[k] = torch.Tensor(result[k])
-            mean = result[k].mean()
-            std = result[k].std() / math.sqrt(len(result[k]))
-            
-            # if k.startswith("err"):
-            if not k.startswith("0_"):
-                row = f"${mean*100:.2f}${{\\tiny$\\pm {std*100:.2f}$}}"
-            else:
-                row = f"${mean:.2f}${{\\tiny$\\pm {std:.2f}$}}" 
-            # else:
-            #    row = f"${mean:.2f} \pm {std:.2f}$"
-                
-            rows += "& " + row 
-            row_names += "& " + k
-                
+        row_names, rows = print_row(result)
         print(row_names)
         print(rows)
         print()
