@@ -1,3 +1,4 @@
+from collections import defaultdict
 import os
 import torch
 import torch.nn as nn
@@ -16,6 +17,18 @@ log = logging.getLogger(__file__)
 log.setLevel(logging.INFO)
 
 import common_utils
+
+def compute_diag_off_diag_avg(kernel):
+    diagonal_avg = kernel.abs().diag().mean().item()
+    off_diag_avg = (kernel.abs().sum() - kernel.abs().diag().sum()) / (kernel.shape[0] * (kernel.shape[0] - 1))
+    return diagonal_avg, off_diag_avg
+
+def fit_diag_11(kernel):
+    # fit the diagonal to be 1 and the off-diagonal to be 1/10
+    diagonal_mean = kernel.diag().mean().item()
+    off_diag_mean = (kernel.sum() - kernel.diag().sum()) / (kernel.shape[0] * (kernel.shape[0] - 1))
+    estimated_kernel = (diagonal_mean - off_diag_mean) * torch.eye(kernel.shape[0]).to(kernel.device) + off_diag_mean 
+    return torch.norm(estimated_kernel - kernel) / torch.norm(kernel)
 
 # Define the modular addition function
 def modular_addition(xs, ys, mods):
@@ -68,6 +81,20 @@ def test_model(model, X_test, y_test, loss_type):
 
     return corrects, loss
 
+class StatsTracker:
+    def __init__(self):
+        self.stats = defaultdict(dict)
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch
+    
+    def update(self, **kwargs):
+        for k, v in kwargs.items():
+            self.stats[self.epoch][k] = v
+
+    def save(self, filename):
+        torch.save(self.stats, filename)
+
 # Define the neural network model
 class ModularAdditionNN(nn.Module):
     def __init__(self, M, hidden_size, activation="sqr", use_bn=False, inverse_mat_layer_reg=None):
@@ -91,7 +118,7 @@ class ModularAdditionNN(nn.Module):
         self.M = M
         self.inverse_mat_layer_reg = inverse_mat_layer_reg
     
-    def forward(self, x, Y=None):
+    def forward(self, x, Y=None, stats_tracker=None):
         y1 = self.embedding(x[:,0])
         y2 = self.embedding(x[:,1]) 
         # x = torch.relu(self.layer1(x))
@@ -109,18 +136,58 @@ class ModularAdditionNN(nn.Module):
         self.x_before_layerc = x.clone()
 
         if self.inverse_mat_layer_reg is not None and Y is not None:
+            use_svd = False
+            update_weightc = False
             with torch.no_grad():
                 # Compute the matrix that maps input to target
                 # X [bs, d]
                 # Y [bs, d_out]
                 # we want to find W so that X W = Y, where W = [d, d_out] 
-                # Compute the SVD of input 
-                U, s, Vt = torch.linalg.svd(x, full_matrices=False)
-                # Then we invert to get W.  
-                # 
-                # self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) / (s[:,None] + self.inverse_mat_layer_reg))).t()
-                reg_diag =  s / (s.pow(2) + self.inverse_mat_layer_reg)
-                self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) * reg_diag[:,None])).t()
+
+                if use_svd:
+                    # Compute the SVD of input 
+                    U, s, Vt = torch.linalg.svd(x, full_matrices=False)
+                    # Then we invert to get W.  
+                    # 
+                    # self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) / (s[:,None] + self.inverse_mat_layer_reg))).t()
+                    reg_diag = s / (s.pow(2) + self.inverse_mat_layer_reg)
+                    log.warning(f"Using SVD, singular value [min, max] are {s.min(), s.max()}, inverse_mat_layer_reg is {self.inverse_mat_layer_reg}")
+                    if update_weightc:
+                        self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) * reg_diag[:,None])).t()
+                else:
+                    x_zero_mean = x - x.mean(dim=0, keepdim=True)
+                    # Use simple matrix inversion
+                    kernel = x_zero_mean.t() @ x_zero_mean 
+                    diag_avg, off_diag_avg = compute_diag_off_diag_avg(kernel)
+                    log.warning(f"~F^t ~F: diag_avg = {diag_avg}, off_diag_avg = {off_diag_avg}, off_diag_avg / diag_avg = {off_diag_avg / diag_avg}")
+
+                    kernel2 = x @ x.t()
+                    dist_from_ideal = fit_diag_11(kernel2)
+                    # zero mean
+                    kernel2 = kernel2 - kernel2.mean(dim=0, keepdim=True)
+                    diag_avg2, off_diag_avg2 = compute_diag_off_diag_avg(kernel2)
+                    log.warning(f"F F^t: diag_avg = {diag_avg2}, off_diag_avg = {off_diag_avg2}, off_diag_avg / diag_avg = {off_diag_avg2 / diag_avg2}, distance from ideal, {dist_from_ideal}")
+
+                    # backpropagated gradient norm
+                    residual = Y - self.layerc(x)
+                    backprop_grad_norm = torch.norm(residual @ self.layerc.weight) 
+                    log.warning(f"Backpropagated gradient norm: {backprop_grad_norm}")
+
+                    if stats_tracker is not None:
+                        stats_tracker.update(**{
+                            "~F^t~F_off_diag_avg": off_diag_avg,
+                            "~F^t~F_diag_avg": diag_avg,
+                            "FF^t_dist_from_ideal": dist_from_ideal,
+                            "FF^t_off_diag_avg": off_diag_avg2,
+                            "FF^t_diag_avg": diag_avg2,
+                            "dF_norm": backprop_grad_norm,
+                        })
+
+                    # Check if the kernel scale is the same as the self.inverse_mat_layer_reg
+                    kernel_scale = kernel.diag().mean().item()
+                    log.warning(f"Kernel scale is {kernel_scale}, inverse_mat_layer_reg is {self.inverse_mat_layer_reg}")
+                    if update_weightc:
+                        self.layerc.weight[:] = (torch.linalg.inv(kernel + self.inverse_mat_layer_reg * torch.eye(x.shape[1]).to(x.device)) @ x.t() @ Y).t()
 
         return [self.layerc(x)]
 
@@ -214,19 +281,29 @@ def main(args):
     Y_train = F.one_hot(y_train.squeeze())
     Y_train = Y_train - 1.0 / group_order
 
+    stats_tracker = StatsTracker()
+
     # Training loop
     for epoch in range(args.num_epochs):
+        stats_tracker.set_epoch(epoch)
+        # Test the model
+        train_accuracies, train_loss = test_model(model, X_train, y_train, args.loss_func)
+        test_accuracies, test_loss = test_model(model, X_test, y_test, args.loss_func)
+
+        train_acc = train_accuracies[0]
+        test_acc = test_accuracies[0]
+
+        log.info(f"Train Accuracy/Loss: {train_acc}/{train_loss}")
+        log.info(f"Test Accuracy/Loss: {test_acc}/{test_loss}\n")
+
+        stats_tracker.update(**{
+            "train_acc": train_acc,
+            "test_acc": test_acc,
+            "train_loss": train_loss,
+            "test_loss": test_loss,
+        })
+
         if epoch % args.save_interval == 0 or epoch < args.init_save_range:
-            # Test the model
-            train_accuracies, train_loss = test_model(model, X_train, y_train, args.loss_func)
-            test_accuracies, test_loss = test_model(model, X_test, y_test, args.loss_func)
-
-            train_acc = train_accuracies[0]
-            test_acc = test_accuracies[0]
-
-            log.info(f"Train Accuracy/Loss: {train_acc}/{train_loss}")
-            log.info(f"Test Accuracy/Loss: {test_acc}/{test_loss}\n")
-
             results.append(dict(epoch=epoch, train_acc=train_acc, test_acc=test_acc, train_loss=train_loss, test_loss=test_loss))
 
             filename = f"model{epoch:05}_train{train_acc:.2f}_loss{train_loss:.4f}_test{test_acc:.2f}_loss{test_loss:.4f}.pt" 
@@ -239,7 +316,7 @@ def main(args):
         optimizer.zero_grad()
         
         # Forward pass
-        outputs = model(X_train, Y_train)
+        outputs = model(X_train, Y=Y_train, stats_tracker=stats_tracker)
 
         # loss = criterion(outputs, y_train)
         loss = compute_loss(outputs, y_train, args.loss_func)
@@ -264,6 +341,9 @@ def main(args):
 
         if epoch % args.eval_interval == 0:
             log.info(f'Epoch [{epoch}/{args.num_epochs}], Loss: {loss.item():.4f}')
+
+    # save the stats_tracker
+    stats_tracker.save("stats_tracker.pt")
 
     # Process the data and save to a final file.
     log.info("Post-Processing data ...")
