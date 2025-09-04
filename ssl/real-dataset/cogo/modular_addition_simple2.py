@@ -345,12 +345,13 @@ def main(args):
     # save the stats_tracker
     stats_tracker.save("stats_tracker.pt")
 
-    # Process the data and save to a final file.
-    log.info("Post-Processing data ...")
-    entry = process_one(os.getcwd())
+    if args.post_process:
+        # Process the data and save to a final file.
+        log.info("Post-Processing data ...")
+        entry = process_one(os.getcwd())
 
-    log.info("Saving ... ")
-    torch.save(entry, "./data.pth")
+        log.info("Saving ... ")
+        torch.save(entry, "./data.pth")
 
     print(os.getcwd())
 
