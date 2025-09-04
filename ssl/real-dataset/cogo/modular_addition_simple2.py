@@ -136,8 +136,8 @@ class ModularAdditionNN(nn.Module):
         self.x_before_layerc = x.clone()
 
         if self.inverse_mat_layer_reg is not None and Y is not None:
-            use_svd = False
-            update_weightc = False
+            use_svd = True
+            update_weightc = True
             with torch.no_grad():
                 # Compute the matrix that maps input to target
                 # X [bs, d]
@@ -303,7 +303,7 @@ def main(args):
             "test_loss": test_loss,
         })
 
-        if epoch % args.save_interval == 0 or epoch < args.init_save_range:
+        if args.save_interval is not None and (epoch % args.save_interval == 0 or epoch < args.init_save_range):
             results.append(dict(epoch=epoch, train_acc=train_acc, test_acc=test_acc, train_loss=train_loss, test_loss=test_loss))
 
             filename = f"model{epoch:05}_train{train_acc:.2f}_loss{train_loss:.4f}_test{test_acc:.2f}_loss{test_loss:.4f}.pt" 
