@@ -89,7 +89,10 @@ class StatsTracker:
         self.epoch = epoch
     
     def update(self, **kwargs):
+        # Convert any 0-order tensor to scalar
         for k, v in kwargs.items():
+            if isinstance(v, torch.Tensor) and len(v.size()) == 0:
+                v = v.item()
             self.stats[self.epoch][k] = v
 
     def save(self, filename):
@@ -135,6 +138,34 @@ class ModularAdditionNN(nn.Module):
 
         self.x_before_layerc = x.clone()
 
+        if stats_tracker is not None:
+            x_zero_mean = x - x.mean(dim=0, keepdim=True)
+            # Use simple matrix inversion
+            kernel = x_zero_mean.t() @ x_zero_mean 
+            diag_avg, off_diag_avg = compute_diag_off_diag_avg(kernel)
+            log.warning(f"~F^t ~F: diag_avg = {diag_avg}, off_diag_avg = {off_diag_avg}, off_diag_avg / diag_avg = {off_diag_avg / diag_avg}")
+
+            kernel2 = x @ x.t()
+            dist_from_ideal = fit_diag_11(kernel2)
+            # zero mean
+            kernel2 = kernel2 - kernel2.mean(dim=0, keepdim=True)
+            diag_avg2, off_diag_avg2 = compute_diag_off_diag_avg(kernel2)
+            log.warning(f"F F^t: diag_avg = {diag_avg2}, off_diag_avg = {off_diag_avg2}, off_diag_avg / diag_avg = {off_diag_avg2 / diag_avg2}, distance from ideal, {dist_from_ideal}")
+
+            # backpropagated gradient norm
+            residual = Y - self.layerc(x)
+            backprop_grad_norm = torch.norm(residual @ self.layerc.weight) 
+            log.warning(f"Backpropagated gradient norm: {backprop_grad_norm}")
+
+            stats_tracker.update(**{
+                "~F^t~F_off_diag_avg": off_diag_avg,
+                "~F^t~F_diag_avg": diag_avg,
+                "FF^t_dist_from_ideal": dist_from_ideal,
+                "FF^t_off_diag_avg": off_diag_avg2,
+                "FF^t_diag_avg": diag_avg2,
+                "dF_norm": backprop_grad_norm,
+            })
+
         if self.inverse_mat_layer_reg is not None and Y is not None:
             use_svd = True
             update_weightc = True
@@ -155,34 +186,7 @@ class ModularAdditionNN(nn.Module):
                     if update_weightc:
                         self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) * reg_diag[:,None])).t()
                 else:
-                    x_zero_mean = x - x.mean(dim=0, keepdim=True)
-                    # Use simple matrix inversion
-                    kernel = x_zero_mean.t() @ x_zero_mean 
-                    diag_avg, off_diag_avg = compute_diag_off_diag_avg(kernel)
-                    log.warning(f"~F^t ~F: diag_avg = {diag_avg}, off_diag_avg = {off_diag_avg}, off_diag_avg / diag_avg = {off_diag_avg / diag_avg}")
-
-                    kernel2 = x @ x.t()
-                    dist_from_ideal = fit_diag_11(kernel2)
-                    # zero mean
-                    kernel2 = kernel2 - kernel2.mean(dim=0, keepdim=True)
-                    diag_avg2, off_diag_avg2 = compute_diag_off_diag_avg(kernel2)
-                    log.warning(f"F F^t: diag_avg = {diag_avg2}, off_diag_avg = {off_diag_avg2}, off_diag_avg / diag_avg = {off_diag_avg2 / diag_avg2}, distance from ideal, {dist_from_ideal}")
-
-                    # backpropagated gradient norm
-                    residual = Y - self.layerc(x)
-                    backprop_grad_norm = torch.norm(residual @ self.layerc.weight) 
-                    log.warning(f"Backpropagated gradient norm: {backprop_grad_norm}")
-
-                    if stats_tracker is not None:
-                        stats_tracker.update(**{
-                            "~F^t~F_off_diag_avg": off_diag_avg,
-                            "~F^t~F_diag_avg": diag_avg,
-                            "FF^t_dist_from_ideal": dist_from_ideal,
-                            "FF^t_off_diag_avg": off_diag_avg2,
-                            "FF^t_diag_avg": diag_avg2,
-                            "dF_norm": backprop_grad_norm,
-                        })
-
+                    kernel = x.t() @ x
                     # Check if the kernel scale is the same as the self.inverse_mat_layer_reg
                     kernel_scale = kernel.diag().mean().item()
                     log.warning(f"Kernel scale is {kernel_scale}, inverse_mat_layer_reg is {self.inverse_mat_layer_reg}")
