@@ -30,3 +30,10 @@ load_dataset_split : null
 load_initial_layerab : null
 
 post_process: false
+
+# If true, it will adjust the test_size accordingly.
+use_critical_ratio: false
+# If use critical ratio is true, then test_size = 1 - c * log(M) / M + critical_ratio_delta
+# c is 5.82-ish
+critical_ratio_delta: 0
+critical_ratio_multiplier: 5.82

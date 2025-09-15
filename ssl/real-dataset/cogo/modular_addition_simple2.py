@@ -232,6 +232,16 @@ def main(args):
 
     y = labels
 
+    # compute the test_size if use_critical_ratio is true
+    if args.use_critical_ratio:
+        # critical ratio delta
+        test_size = 1 - math.log(args.M) / args.M * args.critical_ratio_multiplier + args.critical_ratio_delta
+        test_size = max(min(test_size, 1), 0)
+        log.warning(f"Use critical ratio has set. test_size = {test_size}")
+    else:
+        test_size = args.test_size
+        log.warning(f"Use specified test_size = {test_size}")
+
     if args.load_dataset_split is not None:
         # Load dataset
         data = torch.load(args.load_dataset_split)
@@ -246,7 +256,7 @@ def main(args):
     
     else:
         # Split the dataset into training and test sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size, random_state=args.seed)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=args.seed)
 
     X_train = X_train.cuda()
     X_test = X_test.cuda()
