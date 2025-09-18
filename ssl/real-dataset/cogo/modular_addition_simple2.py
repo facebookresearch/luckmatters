@@ -17,6 +17,7 @@ log = logging.getLogger(__file__)
 log.setLevel(logging.INFO)
 
 import common_utils
+from muon_opt import MuonEnhanced
 
 def compute_diag_off_diag_avg(kernel):
     diagonal_avg = kernel.abs().diag().mean().item()
@@ -284,6 +285,8 @@ def main(args):
         optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
     elif args.optim == "adam":
         optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    elif args.optim == "muon":
+        optimizer = MuonEnhanced(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay, use_bf16=False)
     else:
         raise RuntimeError(f"Unknown optimizer! {args.optim}")
 
