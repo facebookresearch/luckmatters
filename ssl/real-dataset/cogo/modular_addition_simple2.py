@@ -107,9 +107,8 @@ class ModularAdditionNN(nn.Module):
         with torch.no_grad():
             self.embedding.weight[:] = torch.eye(M, M)
             
-        self.layera = nn.Linear(M, hidden_size, bias=False)
-        self.layerb = nn.Linear(M, hidden_size, bias=False)
-        self.layerc = nn.Linear(hidden_size, M, bias=False)
+        self.W = nn.Linear(2*M, hidden_size, bias=False)
+        self.V = nn.Linear(hidden_size, M, bias=False)
 
         if use_bn:
             self.bn = nn.BatchNorm1d(hidden_size)
@@ -123,10 +122,9 @@ class ModularAdditionNN(nn.Module):
         self.inverse_mat_layer_reg = inverse_mat_layer_reg
     
     def forward(self, x, Y=None, stats_tracker=None):
-        y1 = self.embedding(x[:,0])
-        y2 = self.embedding(x[:,1]) 
+        y = torch.concat([self.embedding(x[:,0]), self.embedding(x[:,1])], dim=1) 
         # x = torch.relu(self.layer1(x))
-        x = self.layera(y1) + self.layerb(y2) 
+        x = self.W(y) 
         if self.use_bn:
             x = self.bn(x)
 
@@ -154,8 +152,8 @@ class ModularAdditionNN(nn.Module):
             log.warning(f"F F^t: diag_avg = {diag_avg2}, off_diag_avg = {off_diag_avg2}, off_diag_avg / diag_avg = {off_diag_avg2 / diag_avg2}, distance from ideal, {dist_from_ideal}")
 
             # backpropagated gradient norm
-            residual = Y - self.layerc(x)
-            backprop_grad_norm = torch.norm(residual @ self.layerc.weight) 
+            residual = Y - self.V(x)
+            backprop_grad_norm = torch.norm(residual @ self.V.weight) 
             log.warning(f"Backpropagated gradient norm: {backprop_grad_norm}")
 
             stats_tracker.update(**{
@@ -181,33 +179,32 @@ class ModularAdditionNN(nn.Module):
                     U, s, Vt = torch.linalg.svd(x, full_matrices=False)
                     # Then we invert to get W.  
                     # 
-                    # self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) / (s[:,None] + self.inverse_mat_layer_reg))).t()
+                    # self.V.weight[:] = (Vt.t() @ ((U.t() @ Y) / (s[:,None] + self.inverse_mat_layer_reg))).t()
                     reg_diag = s / (s.pow(2) + self.inverse_mat_layer_reg)
                     log.warning(f"Using SVD, singular value [min, max] are {s.min(), s.max()}, inverse_mat_layer_reg is {self.inverse_mat_layer_reg}")
                     if update_weightc:
-                        self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) * reg_diag[:,None])).t()
+                        self.V.weight[:] = (Vt.t() @ ((U.t() @ Y) * reg_diag[:,None])).t()
                 else:
                     kernel = x.t() @ x
                     # Check if the kernel scale is the same as the self.inverse_mat_layer_reg
                     kernel_scale = kernel.diag().mean().item()
                     log.warning(f"Kernel scale is {kernel_scale}, inverse_mat_layer_reg is {self.inverse_mat_layer_reg}")
                     if update_weightc:
-                        self.layerc.weight[:] = (torch.linalg.inv(kernel + self.inverse_mat_layer_reg * torch.eye(x.shape[1]).to(x.device)) @ x.t() @ Y).t()
+                        self.V.weight[:] = (torch.linalg.inv(kernel + self.inverse_mat_layer_reg * torch.eye(x.shape[1]).to(x.device)) @ x.t() @ Y).t()
 
-        return [self.layerc(x)]
+        return [self.V(x)]
 
     def normalize(self):
         with torch.no_grad():
-            self.layera.weight[:] -= self.layera.weight.mean(dim=1, keepdim=True) 
-            self.layerb.weight[:] -= self.layerb.weight.mean(dim=1, keepdim=True) 
-            self.layerc.weight[:] -= self.layerc.weight.mean(dim=0, keepdim=True) 
+            self.W.weight[:] -= self.W.weight.mean(dim=1, keepdim=True) 
+            self.V.weight[:] -= self.V.weight.mean(dim=0, keepdim=True) 
 
     def scale_down_top(self):
         # Scale down the top layer
         with torch.no_grad():
-            cnorm = self.layerc.weight.norm() 
+            cnorm = self.V.weight.norm() 
             if cnorm > 1:
-                self.layerc.weight[:] /= cnorm
+                self.V.weight[:] /= cnorm
 
 
 @hydra.main(config_path="config", config_name="dyn_madd.yaml")
@@ -273,20 +270,27 @@ def main(args):
                               use_bn=args.use_bn, 
                               inverse_mat_layer_reg=args.set_weight_reg)
 
-    if args.load_initial_layerab is not None:
-        state_dict = torch.load(args.load_initial_layerab)
-        with torch.no_grad():
-            model.layera.weight[:] = state_dict["weight"][:, :group_order]
-            model.layerb.weight[:] = state_dict["weight"][:, group_order:]
-
     model = model.cuda()
 
     if args.optim == "sgd":
-        optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
+        optimizers = [optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)]
     elif args.optim == "adam":
-        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+        optimizers = [optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)]
     elif args.optim == "muon":
-        optimizer = MuonEnhanced(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay, use_bf16=False)
+        optimizers = [
+            optim.Adam(model.V.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay),
+            MuonEnhanced(
+                model.W.parameters(), 
+                beta1 = 0.9,
+                beta2 = 0.99,
+                lr=args.learning_rate, 
+                weight_decay=args.weight_decay, 
+                use_bf16=False, 
+                nesterov=False, 
+                update_rms_compensate=False,
+                update_spectral_compensate=False 
+            )
+        ]
     else:
         raise RuntimeError(f"Unknown optimizer! {args.optim}")
 
@@ -330,7 +334,8 @@ def main(args):
             torch.save(data, filename)
 
         model.train()
-        optimizer.zero_grad()
+        
+        [ opt.zero_grad() for opt in optimizers ]
         
         # Forward pass
         outputs = model(X_train, Y=Y_train, stats_tracker=stats_tracker)
@@ -343,12 +348,10 @@ def main(args):
 
         # if epoch % 100 == 0:
         #     with torch.no_grad():
-        #         print(model.layera.weight.grad.norm())
-        #         print(model.layerb.weight.grad.norm())
+        #         print(model.W.weight.grad.norm())
         # import pdb
         # pdb.set_trace()
-
-        optimizer.step()
+        [ opt.step() for opt in optimizers ]
 
         if args.normalize:
             model.normalize()
