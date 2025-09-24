@@ -36,3 +36,6 @@ use_critical_ratio: false
 # If use critical ratio is true, then test_size = 1 - (critical_ratio_multiplier - critical_ratio_delta) * log(M) / M 
 critical_ratio_delta: 0
 critical_ratio_multiplier: 2.7482
+
+other_layers: 0
+group_type: "modular_addition"

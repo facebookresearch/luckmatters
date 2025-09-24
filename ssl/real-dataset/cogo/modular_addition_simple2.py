@@ -7,6 +7,8 @@ import argparse
 import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from modular_addition_load import process_one
+from sympy.combinatorics import Permutation, PermutationGroup
+from sympy.combinatorics.named_groups import SymmetricGroup
 
 import hydra
 import itertools
@@ -35,7 +37,7 @@ def fit_diag_11(kernel):
 def modular_addition(xs, ys, mods):
     return tuple( (x + y) % mod for x, y, mod in zip(xs, ys, mods) )
 
-def generate_dataset(M):
+def generate_modular_addition_dataset(M):
     if isinstance(M, int):
         orders = [M]
     else: 
@@ -53,6 +55,20 @@ def generate_dataset(M):
             data.append((flattern(x), flattern(y), flattern(z)))
             # print(x, y, z, data[-1])
     return data, math.prod(orders)
+
+def generate_perm_dataset(M):
+    # M is the size of the symmetric group
+    g = SymmetricGroup(M)
+    elements = { perm : i for i, perm in enumerate(g.generate_schreier_sims()) }
+    
+    # do a permutation
+    data = []
+    for g1, i in elements.items():
+        for g2, j in elements.items():
+            k = elements[g1 * g2]
+            data.append((i, j, k))
+
+    return data, int(g.order())
 
 nll_criterion = nn.CrossEntropyLoss().cuda()
 
@@ -101,13 +117,14 @@ class StatsTracker:
 
 # Define the neural network model
 class ModularAdditionNN(nn.Module):
-    def __init__(self, M, hidden_size, activation="sqr", use_bn=False, inverse_mat_layer_reg=None):
+    def __init__(self, M, hidden_size, activation="sqr", use_bn=False, inverse_mat_layer_reg=None, other_layers=0):
         super(ModularAdditionNN, self).__init__()
         self.embedding = nn.Embedding(M, M).requires_grad_(False)
         with torch.no_grad():
             self.embedding.weight[:] = torch.eye(M, M)
             
         self.W = nn.Linear(2*M, hidden_size, bias=False)
+        self.other_layers = nn.ModuleList([ nn.Linear(hidden_size, hidden_size, bias=False) for _ in range(other_layers) ])
         self.V = nn.Linear(hidden_size, M, bias=False)
 
         if use_bn:
@@ -120,6 +137,15 @@ class ModularAdditionNN(nn.Module):
         self.activation = activation
         self.M = M
         self.inverse_mat_layer_reg = inverse_mat_layer_reg
+
+        if self.activation == "sqr": 
+            self.act_fun = lambda x: x.pow(2)
+        elif self.activation == "relu":
+            self.act_fun = lambda x: self.relu(x)
+        elif self.activation == "silu":
+            self.act_fun = lambda x: x * torch.sigmoid(x)
+        else:
+            raise RuntimeError(f"Unknown activation = {self.activation}")
     
     def forward(self, x, Y=None, stats_tracker=None):
         y = torch.concat([self.embedding(x[:,0]), self.embedding(x[:,1])], dim=1) 
@@ -128,12 +154,7 @@ class ModularAdditionNN(nn.Module):
         if self.use_bn:
             x = self.bn(x)
 
-        if self.activation == "sqr": 
-            x = x.pow(2)
-        elif self.activation == "relu":
-            x = self.relu(x)
-        else:
-            raise RuntimeError(f"Unknown activation = {self.activation}")
+        x = self.act_fun(x)
 
         self.x_before_layerc = x.clone()
 
@@ -192,6 +213,10 @@ class ModularAdditionNN(nn.Module):
                     if update_weightc:
                         self.V.weight[:] = (torch.linalg.inv(kernel + self.inverse_mat_layer_reg * torch.eye(x.shape[1]).to(x.device)) @ x.t() @ Y).t()
 
+        for layer in self.other_layers:
+            x = x + layer(x)
+            x = self.act_fun(x)
+
         return [self.V(x)]
 
     def normalize(self):
@@ -215,7 +240,13 @@ def main(args):
     # torch.manual_seed(args.seed)
 
     # Generate dataset
-    dataset, group_order = generate_dataset(args.M)
+    if args.group_type == "modular_addition":
+        dataset, group_order = generate_modular_addition_dataset(args.M)
+    elif args.group_type == "sym":
+        dataset, group_order = generate_perm_dataset(args.M)
+    else:
+        raise RuntimeError(f"Unknown group type = {args.group_type}")
+
     dataset_size = len(dataset)
 
     # Prepare data for training and testing
@@ -268,7 +299,8 @@ def main(args):
     model = ModularAdditionNN(group_order, args.hidden_size, 
                               activation=args.activation, 
                               use_bn=args.use_bn, 
-                              inverse_mat_layer_reg=args.set_weight_reg)
+                              inverse_mat_layer_reg=args.set_weight_reg, 
+                              other_layers=args.other_layers)
 
     model = model.cuda()
 
