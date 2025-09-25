@@ -7,6 +7,8 @@ import argparse
 import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from modular_addition_load import process_one
+from sympy.combinatorics import Permutation, PermutationGroup
+from sympy.combinatorics.named_groups import SymmetricGroup
 
 import hydra
 import itertools
@@ -19,6 +21,7 @@ log = logging.getLogger(__file__)
 log.setLevel(logging.INFO)
 
 import common_utils
+from muon_opt import MuonEnhanced
 
 def compute_diag_off_diag_avg(kernel):
     diagonal_avg = kernel.abs().diag().mean().item()
@@ -36,14 +39,18 @@ def fit_diag_11(kernel):
 def modular_addition(xs, ys, mods):
     return tuple( (x + y) % mod for x, y, mod in zip(xs, ys, mods) )
 
-def generate_dataset(M):
+def generate_modular_addition_dataset(M):
     if isinstance(M, int):
         orders = [M]
     else: 
         orders = [ int(v) for v in M.split("x") ]
 
+    cum_orders = [orders[0]]
+    for o in orders[1:]:
+        cum_orders.append(cum_orders[-1] * o)
+
     def flattern(xs):
-        return sum( x * order for x, order in zip(xs[1:], orders[:-1]) ) + xs[0]
+        return sum( x * order for x, order in zip(xs[1:], cum_orders[:-1]) ) + xs[0]
 
     data = []
     for x in itertools.product(*(range(v) for v in orders)):
@@ -54,6 +61,20 @@ def generate_dataset(M):
             data.append((flattern(x), flattern(y), flattern(z)))
             # print(x, y, z, data[-1])
     return data, math.prod(orders)
+
+def generate_perm_dataset(M):
+    # M is the size of the symmetric group
+    g = SymmetricGroup(M)
+    elements = { perm : i for i, perm in enumerate(g.generate_schreier_sims()) }
+    
+    # do a permutation
+    data = []
+    for g1, i in elements.items():
+        for g2, j in elements.items():
+            k = elements[g1 * g2]
+            data.append((i, j, k))
+
+    return data, int(g.order())
 
 nll_criterion = nn.CrossEntropyLoss().cuda()
 
@@ -91,7 +112,10 @@ class StatsTracker:
         self.epoch = epoch
     
     def update(self, **kwargs):
+        # Convert any 0-order tensor to scalar
         for k, v in kwargs.items():
+            if isinstance(v, torch.Tensor) and len(v.size()) == 0:
+                v = v.item()
             self.stats[self.epoch][k] = v
 
     def save(self, filename):
@@ -99,15 +123,17 @@ class StatsTracker:
 
 # Define the neural network model
 class ModularAdditionNN(nn.Module):
-    def __init__(self, M, hidden_size, activation="sqr", use_bn=False, inverse_mat_layer_reg=None):
+    def __init__(self, M, hidden_size, activation="sqr", use_bn=False, inverse_mat_layer_reg=None, other_layers=0):
         super(ModularAdditionNN, self).__init__()
         self.embedding = nn.Embedding(M, M).requires_grad_(False)
         with torch.no_grad():
             self.embedding.weight[:] = torch.eye(M, M)
             
-        self.layera = nn.Linear(M, hidden_size, bias=False)
-        self.layerb = nn.Linear(M, hidden_size, bias=False)
-        self.layerc = nn.Linear(hidden_size, M, bias=False)
+        self.W = nn.Linear(2*M, hidden_size, bias=False)
+        self.other_layers = nn.ModuleList([ nn.Linear(hidden_size, hidden_size, bias=False) for _ in range(other_layers) ])
+        self.V = nn.Linear(hidden_size, M, bias=False)
+
+        self.num_other_layers = other_layers
 
         if use_bn:
             self.bn = nn.BatchNorm1d(hidden_size)
@@ -119,23 +145,57 @@ class ModularAdditionNN(nn.Module):
         self.activation = activation
         self.M = M
         self.inverse_mat_layer_reg = inverse_mat_layer_reg
+
+        if self.activation == "sqr": 
+            self.act_fun = lambda x: x.pow(2)
+        elif self.activation == "relu":
+            self.act_fun = lambda x: self.relu(x)
+        elif self.activation == "silu":
+            self.act_fun = lambda x: x * torch.sigmoid(x)
+        else:
+            raise RuntimeError(f"Unknown activation = {self.activation}")
     
     def forward(self, x, Y=None, stats_tracker=None):
-        y1 = self.embedding(x[:,0])
-        y2 = self.embedding(x[:,1]) 
+        embed_concat = torch.concat([self.embedding(x[:,0]), self.embedding(x[:,1])], dim=1) 
         # x = torch.relu(self.layer1(x))
-        x = self.layera(y1) + self.layerb(y2) 
+        x = self.W(embed_concat) 
         if self.use_bn:
             x = self.bn(x)
 
-        if self.activation == "sqr": 
-            x = x.pow(2)
-        elif self.activation == "relu":
-            x = self.relu(x)
-        else:
-            raise RuntimeError(f"Unknown activation = {self.activation}")
+        x = self.act_fun(x)
 
         self.x_before_layerc = x.clone()
+
+        if stats_tracker is not None:
+            x_zero_mean = x - x.mean(dim=0, keepdim=True)
+            # Use simple matrix inversion
+            kernel = x_zero_mean.t() @ x_zero_mean 
+            diag_avg, off_diag_avg = compute_diag_off_diag_avg(kernel)
+            log.warning(f"~F^t ~F: diag_avg = {diag_avg}, off_diag_avg = {off_diag_avg}, off_diag_avg / diag_avg = {off_diag_avg / diag_avg}")
+
+            kernel2 = x @ x.t()
+            dist_from_ideal = fit_diag_11(kernel2)
+            # zero mean
+            kernel2 = kernel2 - kernel2.mean(dim=0, keepdim=True)
+            diag_avg2, off_diag_avg2 = compute_diag_off_diag_avg(kernel2)
+            log.warning(f"F F^t: diag_avg = {diag_avg2}, off_diag_avg = {off_diag_avg2}, off_diag_avg / diag_avg = {off_diag_avg2 / diag_avg2}, distance from ideal, {dist_from_ideal}")
+
+            # backpropagated gradient norm
+            if self.num_other_layers == 0:
+                residual = Y - self.V(x)
+                backprop_grad_norm = torch.norm(residual @ self.V.weight) 
+                log.warning(f"Backpropagated gradient norm: {backprop_grad_norm}")
+            else:
+                backprop_grad_norm = None
+
+            stats_tracker.update(**{
+                "~F^t~F_off_diag_avg": off_diag_avg,
+                "~F^t~F_diag_avg": diag_avg,
+                "FF^t_dist_from_ideal": dist_from_ideal,
+                "FF^t_off_diag_avg": off_diag_avg2,
+                "FF^t_diag_avg": diag_avg2,
+                "dF_norm": backprop_grad_norm,
+            })
 
         if self.inverse_mat_layer_reg is not None and Y is not None:
             use_svd = True
@@ -151,68 +211,133 @@ class ModularAdditionNN(nn.Module):
                     U, s, Vt = torch.linalg.svd(x, full_matrices=False)
                     # Then we invert to get W.  
                     # 
-                    # self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) / (s[:,None] + self.inverse_mat_layer_reg))).t()
+                    # self.V.weight[:] = (Vt.t() @ ((U.t() @ Y) / (s[:,None] + self.inverse_mat_layer_reg))).t()
                     reg_diag = s / (s.pow(2) + self.inverse_mat_layer_reg)
                     log.warning(f"Using SVD, singular value [min, max] are {s.min(), s.max()}, inverse_mat_layer_reg is {self.inverse_mat_layer_reg}")
                     if update_weightc:
-                        self.layerc.weight[:] = (Vt.t() @ ((U.t() @ Y) * reg_diag[:,None])).t()
+                        self.V.weight[:] = (Vt.t() @ ((U.t() @ Y) * reg_diag[:,None])).t()
                 else:
-                    x_zero_mean = x - x.mean(dim=0, keepdim=True)
-                    # Use simple matrix inversion
-                    kernel = x_zero_mean.t() @ x_zero_mean 
-                    diag_avg, off_diag_avg = compute_diag_off_diag_avg(kernel)
-                    log.warning(f"~F^t ~F: diag_avg = {diag_avg}, off_diag_avg = {off_diag_avg}, off_diag_avg / diag_avg = {off_diag_avg / diag_avg}")
-
-                    kernel2 = x @ x.t()
-                    dist_from_ideal = fit_diag_11(kernel2)
-                    # zero mean
-                    kernel2 = kernel2 - kernel2.mean(dim=0, keepdim=True)
-                    diag_avg2, off_diag_avg2 = compute_diag_off_diag_avg(kernel2)
-                    log.warning(f"F F^t: diag_avg = {diag_avg2}, off_diag_avg = {off_diag_avg2}, off_diag_avg / diag_avg = {off_diag_avg2 / diag_avg2}, distance from ideal, {dist_from_ideal}")
-
-                    # backpropagated gradient norm
-                    residual = Y - self.layerc(x)
-                    backprop_grad_norm = torch.norm(residual @ self.layerc.weight) 
-                    log.warning(f"Backpropagated gradient norm: {backprop_grad_norm}")
-
-                    if stats_tracker is not None:
-                        stats_tracker.update(**{
-                            "~F^t~F_off_diag_avg": off_diag_avg,
-                            "~F^t~F_diag_avg": diag_avg,
-                            "FF^t_dist_from_ideal": dist_from_ideal,
-                            "FF^t_off_diag_avg": off_diag_avg2,
-                            "FF^t_diag_avg": diag_avg2,
-                            "dF_norm": backprop_grad_norm,
-                        })
-
+                    kernel = x.t() @ x
                     # Check if the kernel scale is the same as the self.inverse_mat_layer_reg
                     kernel_scale = kernel.diag().mean().item()
                     log.warning(f"Kernel scale is {kernel_scale}, inverse_mat_layer_reg is {self.inverse_mat_layer_reg}")
                     if update_weightc:
-                        self.layerc.weight[:] = (torch.linalg.inv(kernel + self.inverse_mat_layer_reg * torch.eye(x.shape[1]).to(x.device)) @ x.t() @ Y).t()
+                        self.V.weight[:] = (torch.linalg.inv(kernel + self.inverse_mat_layer_reg * torch.eye(x.shape[1]).to(x.device)) @ x.t() @ Y).t()
 
-        return [self.layerc(x)]
+        for layer in self.other_layers:
+            x = x + layer(x)
+            x = self.act_fun(x)
+
+        return [self.V(x)]
 
     def normalize(self):
         with torch.no_grad():
-            self.layera.weight[:] -= self.layera.weight.mean(dim=1, keepdim=True) 
-            self.layerb.weight[:] -= self.layerb.weight.mean(dim=1, keepdim=True) 
-            self.layerc.weight[:] -= self.layerc.weight.mean(dim=0, keepdim=True) 
+            self.W.weight[:] -= self.W.weight.mean(dim=1, keepdim=True) 
+            self.V.weight[:] -= self.V.weight.mean(dim=0, keepdim=True) 
 
     def scale_down_top(self):
         # Scale down the top layer
         with torch.no_grad():
-            cnorm = self.layerc.weight.norm() 
+            cnorm = self.V.weight.norm() 
             if cnorm > 1:
-                self.layerc.weight[:] /= cnorm
+                self.V.weight[:] /= cnorm
 
 
+<<<<<<< HEAD
 def train_model(model, X_train, y_train, Y_train, X_test, y_test, args):
+=======
+@hydra.main(config_path="config", config_name="dyn_madd.yaml")
+def main(args):
+    # Set random seed for reproducibility
+    log.info(common_utils.print_info(args))
+    common_utils.set_all_seeds(args.seed)
+    # torch.manual_seed(args.seed)
+
+    # Generate dataset
+    if args.group_type == "modular_addition":
+        dataset, group_order = generate_modular_addition_dataset(args.M)
+    elif args.group_type == "sym":
+        dataset, group_order = generate_perm_dataset(args.M)
+    else:
+        raise RuntimeError(f"Unknown group type = {args.group_type}")
+
+    dataset_size = len(dataset)
+
+    # Prepare data for training and testing
+    X = torch.LongTensor(dataset_size, 2)
+    # Use 
+    labels = torch.LongTensor(dataset_size, 1)
+
+    for i, (x, y, z) in enumerate(dataset):
+        X[i, 0] = x
+        X[i, 1] = y
+        labels[i] = z
+
+    y = labels
+
+    # compute the test_size if use_critical_ratio is true
+    if args.use_critical_ratio:
+        # critical ratio delta
+        test_size = 1 - math.log(group_order) / group_order * (args.critical_ratio_multiplier - args.critical_ratio_delta)
+        test_size = max(min(test_size, 1), 0)
+        log.warning(f"Use critical ratio has set. test_size = {test_size}")
+    else:
+        test_size = args.test_size
+        log.warning(f"Use specified test_size = {test_size}")
+
+    if args.load_dataset_split is not None:
+        # Load dataset
+        data = torch.load(args.load_dataset_split)
+        train_indices = data["train_indices"]
+        test_indices = data["test_indices"]
+
+        X_train = X[train_indices, :]
+        y_train = y[train_indices]
+
+        X_test = X[test_indices, :]
+        y_test = y[test_indices]
+    
+    else:
+        # Split the dataset into training and test sets
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=args.seed)
+
+    X_train = X_train.cuda()
+    X_test = X_test.cuda()
+    y_train = y_train.cuda()
+    y_test = y_test.cuda()
+
+    # Initialize the model, loss function, and optimizer
+    if args.set_weight_reg is not None:
+        assert args.loss_func == "mse", "only MSE loss can use set_weight_reg != None" 
+
+    model = ModularAdditionNN(group_order, args.hidden_size, 
+                              activation=args.activation, 
+                              use_bn=args.use_bn, 
+                              inverse_mat_layer_reg=args.set_weight_reg, 
+                              other_layers=args.other_layers)
+
+    model = model.cuda()
+>>>>>>> 70a8fb4fd3bdb73d504b3e78ae898776472a6acc
 
     if args.optim == "sgd":
-        optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
+        optimizers = [optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)]
     elif args.optim == "adam":
-        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+        optimizers = [optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)]
+    elif args.optim == "muon":
+        optimizers = [
+            optim.Adam(model.V.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay),
+            MuonEnhanced(
+                model.W.parameters(), 
+                beta1 = 0.9,
+                beta2 = 0.99,
+                lr=args.learning_rate, 
+                weight_decay=args.weight_decay, 
+                use_bf16=False, 
+                nesterov=False, 
+                update_rms_compensate=False,
+                update_spectral_compensate=False 
+            )
+        ]
     else:
         raise RuntimeError(f"Unknown optimizer! {args.optim}")
 
@@ -251,7 +376,8 @@ def train_model(model, X_train, y_train, Y_train, X_test, y_test, args):
             torch.save(data, filename)
 
         model.train()
-        optimizer.zero_grad()
+        
+        [ opt.zero_grad() for opt in optimizers ]
         
         # Forward pass
         outputs = model(X_train, Y=Y_train, stats_tracker=stats_tracker)
@@ -264,12 +390,10 @@ def train_model(model, X_train, y_train, Y_train, X_test, y_test, args):
 
         # if epoch % 100 == 0:
         #     with torch.no_grad():
-        #         print(model.layera.weight.grad.norm())
-        #         print(model.layerb.weight.grad.norm())
+        #         print(model.W.weight.grad.norm())
         # import pdb
         # pdb.set_trace()
-
-        optimizer.step()
+        [ opt.step() for opt in optimizers ]
 
         if args.normalize:
             model.normalize()
