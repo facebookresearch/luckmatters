@@ -13,8 +13,6 @@ from sympy.combinatorics.named_groups import SymmetricGroup
 import hydra
 import itertools
 
-from torch.profiler import profile, record_function, ProfilerActivity
-
 import math
 import logging
 log = logging.getLogger(__file__)
@@ -243,9 +241,6 @@ class ModularAdditionNN(nn.Module):
                 self.V.weight[:] /= cnorm
 
 
-<<<<<<< HEAD
-def train_model(model, X_train, y_train, Y_train, X_test, y_test, args):
-=======
 @hydra.main(config_path="config", config_name="dyn_madd.yaml")
 def main(args):
     # Set random seed for reproducibility
@@ -317,7 +312,6 @@ def main(args):
                               other_layers=args.other_layers)
 
     model = model.cuda()
->>>>>>> 70a8fb4fd3bdb73d504b3e78ae898776472a6acc
 
     if args.optim == "sgd":
         optimizers = [optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)]
@@ -345,8 +339,13 @@ def main(args):
 
     results = []
 
-    # Training loop
+    # Get a one hot y_train
+    Y_train = F.one_hot(y_train.squeeze())
+    Y_train = Y_train - 1.0 / group_order
+
     stats_tracker = StatsTracker()
+
+    # Training loop
     for epoch in range(args.num_epochs):
         stats_tracker.set_epoch(epoch)
         # Test the model
@@ -406,84 +405,6 @@ def main(args):
 
     # save the stats_tracker
     stats_tracker.save("stats_tracker.pt")
-
-    return results
-
-
-
-@hydra.main(config_path="config", config_name="dyn_madd.yaml")
-def main(args):
-    # Set random seed for reproducibility
-    log.info(common_utils.print_info(args))
-    common_utils.set_all_seeds(args.seed)
-    # torch.manual_seed(args.seed)
-
-    # Generate dataset
-    dataset, group_order = generate_dataset(args.M)
-    dataset_size = len(dataset)
-
-    # Prepare data for training and testing
-    X = torch.LongTensor(dataset_size, 2)
-    # Use 
-    labels = torch.LongTensor(dataset_size, 1)
-
-    for i, (x, y, z) in enumerate(dataset):
-        X[i, 0] = x
-        X[i, 1] = y
-        labels[i] = z
-
-    y = labels
-
-    if args.load_dataset_split is not None:
-        # Load dataset
-        data = torch.load(args.load_dataset_split)
-        train_indices = data["train_indices"]
-        test_indices = data["test_indices"]
-
-        X_train = X[train_indices, :]
-        y_train = y[train_indices]
-
-        X_test = X[test_indices, :]
-        y_test = y[test_indices]
-    
-    else:
-        # Split the dataset into training and test sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size, random_state=args.seed)
-
-    X_train = X_train.cuda()
-    X_test = X_test.cuda()
-    y_train = y_train.cuda()
-    y_test = y_test.cuda()
-
-    # Initialize the model, loss function, and optimizer
-    if args.set_weight_reg is not None:
-        assert args.loss_func == "mse", "only MSE loss can use set_weight_reg != None" 
-
-    model = ModularAdditionNN(group_order, args.hidden_size, 
-                              activation=args.activation, 
-                              use_bn=args.use_bn, 
-                              inverse_mat_layer_reg=args.set_weight_reg)
-
-    if args.load_initial_layerab is not None:
-        state_dict = torch.load(args.load_initial_layerab)
-        with torch.no_grad():
-            model.layera.weight[:] = state_dict["weight"][:, :group_order]
-            model.layerb.weight[:] = state_dict["weight"][:, group_order:]
-
-    model = model.cuda()
-
-    results = []
-
-    # Get a one hot y_train
-    Y_train = F.one_hot(y_train.squeeze())
-    Y_train = Y_train - 1.0 / group_order
-
-    # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-    #             record_shapes=True, with_stack=True, with_flops=True,
-    #             on_trace_ready=torch.profiler.tensorboard_trace_handler("./tb")) as prof:
-    results = train_model(model, X_train, y_train, Y_train, X_test, y_test, args)
-
-    # print(prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=20))
 
     if args.post_process:
         # Process the data and save to a final file.
