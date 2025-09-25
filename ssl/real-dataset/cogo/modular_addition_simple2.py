@@ -264,7 +264,7 @@ def main(args):
     # compute the test_size if use_critical_ratio is true
     if args.use_critical_ratio:
         # critical ratio delta
-        test_size = 1 - math.log(args.M) / args.M * (args.critical_ratio_multiplier - args.critical_ratio_delta)
+        test_size = 1 - math.log(group_order) / group_order * (args.critical_ratio_multiplier - args.critical_ratio_delta)
         test_size = max(min(test_size, 1), 0)
         log.warning(f"Use critical ratio has set. test_size = {test_size}")
     else:
