@@ -43,8 +43,12 @@ def generate_modular_addition_dataset(M):
     else: 
         orders = [ int(v) for v in M.split("x") ]
 
+    cum_orders = [orders[0]]
+    for o in orders[1:]:
+        cum_orders.append(cum_orders[-1] * o)
+
     def flattern(xs):
-        return sum( x * order for x, order in zip(xs[1:], orders[:-1]) ) + xs[0]
+        return sum( x * order for x, order in zip(xs[1:], cum_orders[:-1]) ) + xs[0]
 
     data = []
     for x in itertools.product(*(range(v) for v in orders)):
@@ -127,6 +131,8 @@ class ModularAdditionNN(nn.Module):
         self.other_layers = nn.ModuleList([ nn.Linear(hidden_size, hidden_size, bias=False) for _ in range(other_layers) ])
         self.V = nn.Linear(hidden_size, M, bias=False)
 
+        self.num_other_layers = other_layers
+
         if use_bn:
             self.bn = nn.BatchNorm1d(hidden_size)
             self.use_bn = True
@@ -148,9 +154,9 @@ class ModularAdditionNN(nn.Module):
             raise RuntimeError(f"Unknown activation = {self.activation}")
     
     def forward(self, x, Y=None, stats_tracker=None):
-        y = torch.concat([self.embedding(x[:,0]), self.embedding(x[:,1])], dim=1) 
+        embed_concat = torch.concat([self.embedding(x[:,0]), self.embedding(x[:,1])], dim=1) 
         # x = torch.relu(self.layer1(x))
-        x = self.W(y) 
+        x = self.W(embed_concat) 
         if self.use_bn:
             x = self.bn(x)
 
@@ -173,9 +179,12 @@ class ModularAdditionNN(nn.Module):
             log.warning(f"F F^t: diag_avg = {diag_avg2}, off_diag_avg = {off_diag_avg2}, off_diag_avg / diag_avg = {off_diag_avg2 / diag_avg2}, distance from ideal, {dist_from_ideal}")
 
             # backpropagated gradient norm
-            residual = Y - self.V(x)
-            backprop_grad_norm = torch.norm(residual @ self.V.weight) 
-            log.warning(f"Backpropagated gradient norm: {backprop_grad_norm}")
+            if self.num_other_layers == 0:
+                residual = Y - self.V(x)
+                backprop_grad_norm = torch.norm(residual @ self.V.weight) 
+                log.warning(f"Backpropagated gradient norm: {backprop_grad_norm}")
+            else:
+                backprop_grad_norm = None
 
             stats_tracker.update(**{
                 "~F^t~F_off_diag_avg": off_diag_avg,
