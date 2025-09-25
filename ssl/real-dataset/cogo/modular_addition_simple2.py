@@ -11,6 +11,8 @@ from modular_addition_load import process_one
 import hydra
 import itertools
 
+from torch.profiler import profile, record_function, ProfilerActivity
+
 import math
 import logging
 log = logging.getLogger(__file__)
@@ -205,6 +207,86 @@ class ModularAdditionNN(nn.Module):
                 self.layerc.weight[:] /= cnorm
 
 
+def train_model(model, X_train, y_train, Y_train, X_test, y_test, args):
+
+    if args.optim == "sgd":
+        optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
+    elif args.optim == "adam":
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    else:
+        raise RuntimeError(f"Unknown optimizer! {args.optim}")
+
+    # optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=3e-4)
+
+    results = []
+
+    # Training loop
+    stats_tracker = StatsTracker()
+    for epoch in range(args.num_epochs):
+        stats_tracker.set_epoch(epoch)
+        # Test the model
+        train_accuracies, train_loss = test_model(model, X_train, y_train, args.loss_func)
+        test_accuracies, test_loss = test_model(model, X_test, y_test, args.loss_func)
+
+        train_acc = train_accuracies[0]
+        test_acc = test_accuracies[0]
+
+        log.info(f"Train Accuracy/Loss: {train_acc}/{train_loss}")
+        log.info(f"Test Accuracy/Loss: {test_acc}/{test_loss}\n")
+
+        stats_tracker.update(**{
+            "train_acc": train_acc,
+            "test_acc": test_acc,
+            "train_loss": train_loss,
+            "test_loss": test_loss,
+        })
+
+        if args.save_interval is not None and (epoch % args.save_interval == 0 or epoch < args.init_save_range):
+            results.append(dict(epoch=epoch, train_acc=train_acc, test_acc=test_acc, train_loss=train_loss, test_loss=test_loss))
+
+            filename = f"model{epoch:05}_train{train_acc:.2f}_loss{train_loss:.4f}_test{test_acc:.2f}_loss{test_loss:.4f}.pt" 
+
+            data = dict(model=model.state_dict(), results=results) 
+
+            torch.save(data, filename)
+
+        model.train()
+        optimizer.zero_grad()
+        
+        # Forward pass
+        outputs = model(X_train, Y=Y_train, stats_tracker=stats_tracker)
+
+        # loss = criterion(outputs, y_train)
+        loss = compute_loss(outputs, y_train, args.loss_func)
+        
+        # Backward and optimize
+        loss.backward()
+
+        # if epoch % 100 == 0:
+        #     with torch.no_grad():
+        #         print(model.layera.weight.grad.norm())
+        #         print(model.layerb.weight.grad.norm())
+        # import pdb
+        # pdb.set_trace()
+
+        optimizer.step()
+
+        if args.normalize:
+            model.normalize()
+
+        if args.scale_down_top:
+            model.scale_down_top()
+
+        if epoch % args.eval_interval == 0:
+            log.info(f'Epoch [{epoch}/{args.num_epochs}], Loss: {loss.item():.4f}')
+
+    # save the stats_tracker
+    stats_tracker.save("stats_tracker.pt")
+
+    return results
+
+
+
 @hydra.main(config_path="config", config_name="dyn_madd.yaml")
 def main(args):
     # Set random seed for reproducibility
@@ -266,84 +348,18 @@ def main(args):
 
     model = model.cuda()
 
-    if args.optim == "sgd":
-        optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
-    elif args.optim == "adam":
-        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-    else:
-        raise RuntimeError(f"Unknown optimizer! {args.optim}")
-
-    # optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=3e-4)
-
     results = []
 
     # Get a one hot y_train
     Y_train = F.one_hot(y_train.squeeze())
     Y_train = Y_train - 1.0 / group_order
 
-    stats_tracker = StatsTracker()
+    # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    #             record_shapes=True, with_stack=True, with_flops=True,
+    #             on_trace_ready=torch.profiler.tensorboard_trace_handler("./tb")) as prof:
+    results = train_model(model, X_train, y_train, Y_train, X_test, y_test, args)
 
-    # Training loop
-    for epoch in range(args.num_epochs):
-        stats_tracker.set_epoch(epoch)
-        # Test the model
-        train_accuracies, train_loss = test_model(model, X_train, y_train, args.loss_func)
-        test_accuracies, test_loss = test_model(model, X_test, y_test, args.loss_func)
-
-        train_acc = train_accuracies[0]
-        test_acc = test_accuracies[0]
-
-        log.info(f"Train Accuracy/Loss: {train_acc}/{train_loss}")
-        log.info(f"Test Accuracy/Loss: {test_acc}/{test_loss}\n")
-
-        stats_tracker.update(**{
-            "train_acc": train_acc,
-            "test_acc": test_acc,
-            "train_loss": train_loss,
-            "test_loss": test_loss,
-        })
-
-        if args.save_interval is not None and (epoch % args.save_interval == 0 or epoch < args.init_save_range):
-            results.append(dict(epoch=epoch, train_acc=train_acc, test_acc=test_acc, train_loss=train_loss, test_loss=test_loss))
-
-            filename = f"model{epoch:05}_train{train_acc:.2f}_loss{train_loss:.4f}_test{test_acc:.2f}_loss{test_loss:.4f}.pt" 
-
-            data = dict(model=model.state_dict(), results=results) 
-
-            torch.save(data, filename)
-
-        model.train()
-        optimizer.zero_grad()
-        
-        # Forward pass
-        outputs = model(X_train, Y=Y_train, stats_tracker=stats_tracker)
-
-        # loss = criterion(outputs, y_train)
-        loss = compute_loss(outputs, y_train, args.loss_func)
-        
-        # Backward and optimize
-        loss.backward()
-
-        # if epoch % 100 == 0:
-        #     with torch.no_grad():
-        #         print(model.layera.weight.grad.norm())
-        #         print(model.layerb.weight.grad.norm())
-        # import pdb
-        # pdb.set_trace()
-
-        optimizer.step()
-
-        if args.normalize:
-            model.normalize()
-
-        if args.scale_down_top:
-            model.scale_down_top()
-
-        if epoch % args.eval_interval == 0:
-            log.info(f'Epoch [{epoch}/{args.num_epochs}], Loss: {loss.item():.4f}')
-
-    # save the stats_tracker
-    stats_tracker.save("stats_tracker.pt")
+    # print(prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=20))
 
     if args.post_process:
         # Process the data and save to a final file.
