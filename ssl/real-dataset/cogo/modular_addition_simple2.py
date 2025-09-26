@@ -1,5 +1,8 @@
+from ast import Tuple
 from collections import defaultdict
+import json
 import os
+from typing import Iterable, List, Tuple
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -73,6 +76,40 @@ def generate_perm_dataset(M):
             data.append((i, j, k))
 
     return data, int(g.order())
+
+def to_zero_based_table(table_1b: List[List[int]], index_base: int = 1) -> List[List[int]]:
+    off = index_base
+    return [[x - off for x in row] for row in table_1b]
+
+def triples_from_table(tbl0: List[List[int]]) -> List[Tuple[int,int,int]]:
+    n = len(tbl0)
+    return [(i, j, tbl0[i][j]) for i in range(n) for j in range(n)]
+
+def load_non_abelian_collection(M, dk_max=2):
+    # M is a index. 
+    # Load the non-abelian collection from the file
+    # Get all non-abelian group with d_k <= 2
+    # Get the current folder of this script
+    current_folder = os.path.dirname(os.path.abspath(__file__))
+    json_file = os.path.join(current_folder, "smallgroups_nonabelian_upto_128.jsonl")
+    data = [ json.loads(line) for line in open(json_file, "r") ]
+
+    # find rec so that rec["irrep_degrees"] <= dk_max
+    data = [ rec for rec in data if max(rec["irrep_degrees"]) <= dk_max ]
+
+    print(f"Found {len(data)} non-abelian groups with d_k <= {dk_max}")
+
+    # Load the group, get the cayley table
+    rec = data[M]
+    tbl0 = to_zero_based_table(rec["table"], rec.get("index_base", 1))
+    triples = triples_from_table(tbl0)
+
+    rec["name"] = rec["name"].replace("\'\'", "")
+    print(f"SmallGroup({rec['order']},{rec['smallgroup_id']})  name={rec['name']}")
+    print(f"  num_irreps={rec['num_irreps']}  first irrep degrees={rec['irrep_degrees'][:10]}{'...' if len(rec['irrep_degrees'])>10 else ''}")
+    print(f"  triples sample: {triples[:min(6, len(triples))]}  (total {len(triples)})")
+
+    return triples, int(rec["order"])
 
 nll_criterion = nn.CrossEntropyLoss().cuda()
 
@@ -253,6 +290,9 @@ def main(args):
         dataset, group_order = generate_modular_addition_dataset(args.M)
     elif args.group_type == "sym":
         dataset, group_order = generate_perm_dataset(args.M)
+    elif args.group_type == "collection":
+        # In this case, M becomes a index. 
+        dataset, group_order = load_non_abelian_collection(args.M)
     else:
         raise RuntimeError(f"Unknown group type = {args.group_type}")
 
