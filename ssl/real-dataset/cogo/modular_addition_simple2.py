@@ -88,16 +88,15 @@ def triples_from_table(tbl0: List[List[int]]) -> List[Tuple[int,int,int]]:
 def load_non_abelian_collection(M, dk_max=2):
     # M is a index. 
     # Load the non-abelian collection from the file
-    # Get all non-abelian group with d_k <= 2
+    # Get all non-abelian group with max_k d_k == dk_max
     # Get the current folder of this script
-    current_folder = os.path.dirname(os.path.abspath(__file__))
-    json_file = os.path.join(current_folder, "smallgroups_nonabelian_upto_128.jsonl")
+    json_file = "/private/home/yuandong/luckmatters/ssl/real-dataset/cogo/smallgroups_nonabelian_upto_128.jsonl"
     data = [ json.loads(line) for line in open(json_file, "r") ]
 
-    # find rec so that rec["irrep_degrees"] <= dk_max
-    data = [ rec for rec in data if max(rec["irrep_degrees"]) <= dk_max ]
+    # find rec so that rec["irrep_degrees"] == dk_max
+    data = [ rec for rec in data if max(rec["irrep_degrees"]) == dk_max ]
 
-    print(f"Found {len(data)} non-abelian groups with d_k <= {dk_max}")
+    print(f"Found {len(data)} non-abelian groups with max_k d_k == {dk_max}")
 
     # Load the group, get the cayley table
     rec = data[M]
@@ -288,11 +287,14 @@ def main(args):
     # Generate dataset
     if args.group_type == "modular_addition":
         dataset, group_order = generate_modular_addition_dataset(args.M)
+        scaling_law_correction = 1
     elif args.group_type == "sym":
         dataset, group_order = generate_perm_dataset(args.M)
+        scaling_law_correction = 1
     elif args.group_type == "collection":
         # In this case, M becomes a index. 
-        dataset, group_order = load_non_abelian_collection(args.M)
+        dataset, group_order = load_non_abelian_collection(args.M, dk_max=args.group_collection_max_dk)
+        scaling_law_correction = args.group_collection_max_dk / 2 
     else:
         raise RuntimeError(f"Unknown group type = {args.group_type}")
 
@@ -313,7 +315,7 @@ def main(args):
     # compute the test_size if use_critical_ratio is true
     if args.use_critical_ratio:
         # critical ratio delta
-        test_size = 1 - math.log(group_order) / group_order * (args.critical_ratio_multiplier - args.critical_ratio_delta)
+        test_size = 1 - scaling_law_correction * math.log(group_order) / group_order * (args.critical_ratio_multiplier - args.critical_ratio_delta) 
         test_size = max(min(test_size, 1), 0)
         log.warning(f"Use critical ratio has set. test_size = {test_size}")
     else:

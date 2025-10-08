@@ -39,3 +39,5 @@ critical_ratio_multiplier: 2.7482
 
 other_layers: 0
 group_type: "modular_addition"
+
+group_collection_max_dk: 0
