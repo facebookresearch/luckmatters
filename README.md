@@ -1,11 +1,17 @@
 This repo contains the code of the following 9 papers:
 
 ## Algebraic Structure of Representation in Reasoning tasks 
-**Composing Global Optimizers to Reasoning Tasks via Algebraic Objects in Neural Nets**
+**Provable Scaling Laws of Feature Emergence from Learning Dynamics of Grokking**
 
 Yuandong Tian
 
-[arXiv'24](https://arxiv.org/abs/2410.01779)
+[arXiv'25](https://arxiv.org/abs/2509.21519)
+
+**Composing Global Solutions to Reasoning Tasks via Algebraic Objects in Neural Nets**
+
+Yuandong Tian
+
+[NeurIPS'25](https://arxiv.org/abs/2410.01779)
 
 
 ## Analysis of Transformer training dynamics (`./ssl/real-dataset`)

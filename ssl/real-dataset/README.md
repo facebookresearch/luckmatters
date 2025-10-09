@@ -231,10 +231,10 @@ Yuandong Tian, Yiping Wang, Zhenyu Zhang, Beidi Chen, Simon Du
 [ICLR'24](https://arxiv.org/abs/2310.00535)
 
 
-[7] **Composing Global Optimizers to Reasoning Tasks via Algebraic Objects in Neural Nets**
+[7] **Composing Global Solutions to Reasoning Tasks via Algebraic Objects in Neural Nets**
 
 Yuandong Tian
 
-[arXiv'24](https://arxiv.org/abs/2410.01779)
+[NeurIPS'25](https://arxiv.org/abs/2410.01779)
 
 
