@@ -192,6 +192,8 @@ class ModularAdditionNN(nn.Module):
             self.act_fun = lambda x: self.relu(x)
         elif self.activation == "silu":
             self.act_fun = lambda x: x * torch.sigmoid(x)
+        elif self.activation == "relusqr":
+            self.act_fun = lambda x: self.relu(x) ** 2
         else:
             raise RuntimeError(f"Unknown activation = {self.activation}")
     
