@@ -37,10 +37,13 @@ def fit_diag_11(kernel):
     return torch.norm(estimated_kernel - kernel) / torch.norm(kernel)
 
 # Define the modular addition function
-def modular_addition(xs, ys, mods):
-    return tuple( (x + y) % mod for x, y, mod in zip(xs, ys, mods) )
+def modular_addition(ops, mods):
+    accu_ops = [0] * len(mods)
+    for op in ops:
+        accu_ops = [ (o + accu_op) % mod for o, accu_op, mod in zip(op, accu_ops, mods) ]
+    return tuple(accu_ops)
 
-def generate_modular_addition_dataset(M):
+def generate_modular_addition_dataset(M, num_of_ops=2):
     if isinstance(M, int):
         orders = [M]
     else: 
@@ -54,13 +57,15 @@ def generate_modular_addition_dataset(M):
         return sum( x * order for x, order in zip(xs[1:], cum_orders[:-1]) ) + xs[0]
 
     data = []
-    for x in itertools.product(*(range(v) for v in orders)):
-        for y in itertools.product(*(range(v) for v in orders)):
-            # 
-            z = modular_addition(x, y, orders)
-            # flattern them
-            data.append((flattern(x), flattern(y), flattern(z)))
-            # print(x, y, z, data[-1])
+    # if we have multiple ops, do itertools.product for each op
+    iters = itertools.product(*[ itertools.product(*(range(v) for v in orders)) for _ in range(num_of_ops) ])
+
+    for ops in iters:
+        z = modular_addition(ops, orders)
+        record = [flattern(o) for o in ops]
+        record.append(flattern(z))
+        data.append(tuple(record))
+
     return data, math.prod(orders)
 
 def generate_perm_dataset(M):
@@ -157,13 +162,13 @@ class StatsTracker:
 
 # Define the neural network model
 class ModularAdditionNN(nn.Module):
-    def __init__(self, M, hidden_size, activation="sqr", use_bn=False, inverse_mat_layer_reg=None, other_layers=0):
+    def __init__(self, M, num_of_ops, hidden_size, activation="sqr", use_bn=False, inverse_mat_layer_reg=None, other_layers=0):
         super(ModularAdditionNN, self).__init__()
         self.embedding = nn.Embedding(M, M).requires_grad_(False)
         with torch.no_grad():
             self.embedding.weight[:] = torch.eye(M, M)
             
-        self.W = nn.Linear(2*M, hidden_size, bias=False)
+        self.W = nn.Linear(num_of_ops*M, hidden_size, bias=False)
         self.other_layers = nn.ModuleList([ nn.Linear(hidden_size, hidden_size, bias=False) for _ in range(other_layers) ])
         self.V = nn.Linear(hidden_size, M, bias=False)
 
@@ -176,6 +181,7 @@ class ModularAdditionNN(nn.Module):
             self.use_bn = False
 
         self.relu = nn.ReLU()
+        self.num_of_ops = num_of_ops
         self.activation = activation
         self.M = M
         self.inverse_mat_layer_reg = inverse_mat_layer_reg
@@ -190,7 +196,8 @@ class ModularAdditionNN(nn.Module):
             raise RuntimeError(f"Unknown activation = {self.activation}")
     
     def forward(self, x, Y=None, stats_tracker=None):
-        embed_concat = torch.concat([self.embedding(x[:,0]), self.embedding(x[:,1])], dim=1) 
+        assert x.shape[1] == self.num_of_ops, f"x.shape[1] = {x.shape[1]} != {self.num_of_ops}"
+        embed_concat = torch.concat([self.embedding(x[:,i]) for i in range(self.num_of_ops)], dim=1) 
         # x = torch.relu(self.layer1(x))
         x = self.W(embed_concat) 
         if self.use_bn:
@@ -286,7 +293,7 @@ def main(args):
 
     # Generate dataset
     if args.group_type == "modular_addition":
-        dataset, group_order = generate_modular_addition_dataset(args.M)
+        dataset, group_order = generate_modular_addition_dataset(args.M, args.num_of_ops)
         scaling_law_correction = 1
     elif args.group_type == "sym":
         dataset, group_order = generate_perm_dataset(args.M)
@@ -301,14 +308,14 @@ def main(args):
     dataset_size = len(dataset)
 
     # Prepare data for training and testing
-    X = torch.LongTensor(dataset_size, 2)
+    X = torch.LongTensor(dataset_size, args.num_of_ops)
     # Use 
     labels = torch.LongTensor(dataset_size, 1)
 
-    for i, (x, y, z) in enumerate(dataset):
-        X[i, 0] = x
-        X[i, 1] = y
-        labels[i] = z
+    for i, record in enumerate(dataset):
+        for j, op in enumerate(record[:-1]):
+            X[i, j] = op
+        labels[i] = record[-1]
 
     y = labels
 
@@ -347,7 +354,7 @@ def main(args):
     if args.set_weight_reg is not None:
         assert args.loss_func == "mse", "only MSE loss can use set_weight_reg != None" 
 
-    model = ModularAdditionNN(group_order, args.hidden_size, 
+    model = ModularAdditionNN(group_order, args.num_of_ops, args.hidden_size, 
                               activation=args.activation, 
                               use_bn=args.use_bn, 
                               inverse_mat_layer_reg=args.set_weight_reg, 

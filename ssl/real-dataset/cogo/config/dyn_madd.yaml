@@ -24,6 +24,8 @@ normalize: false
 
 set_weight_reg : 1e-3
 
+num_of_ops: 2
+
 scale_down_top: false
 
 load_dataset_split : null
