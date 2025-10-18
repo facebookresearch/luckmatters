@@ -1,240 +1,132 @@
-# Introduction
-The codebase is built from this [repo](https://github.com/sthalles/PyTorch-BYOL), with proper modifications. It is used in the following two arXiv papers:
+# Introduction 
 
-You will need to install [hydra](https://github.com/facebookresearch/hydra) for parameter configuration and supporting of sweeps.  
+Implementations and experiment scripts accompanying several works on the theory and practice of self-supervised learning, contrastive learning, gradient dynamics analysis of Transformers, and grokking behaviors. The codebase started from the [PyTorch-BYOL implementation](https://github.com/sthalles/PyTorch-BYOL) and has since been extended to cover the projects listed in the reference section.
 
-Note that to avoid downloading dataset every time you run the program, you can change `dataset_path` in `config/byol_config.yaml` (which is actually shared by both BYOL and SimCLR methods) to an absolute path.
+Hydra is used to manage configurations. All commands below should be executed from the repository root (`ssl/real-dataset`) so that the relative config paths resolve correctly and Hydra writes outputs under `./outputs`. When using Hydra multiruns (commands containing `-m`), results are grouped under timestamped directories.
 
-# Prerequisite
+## Environment Setup
+- **Python**: Tested with Python 3.8 and PyTorch 1.7.1 + CUDA 10.1 (see `requirement.txt` for exact versions).
+- **System packages**: GPU drivers compatible with the listed CUDA version are required for accelerated training.
+- **Python dependencies**:
+  1. (Optional but recommended) create a virtual environment.
+     ```bash
+     python3 -m venv .venv
+     source .venv/bin/activate
+     pip install --upgrade pip
+     ```
+  2. Install third-party packages.
+     ```bash
+     pip install -r requirement.txt
+     ```
+  3. Install the shared utilities used throughout the repository.
+     ```bash
+     git clone https://github.com/yuandong-tian/tools2 ~/tools2
+     pip install -e ~/tools2/common_utils
+     ```
+- **Python path**: add this repository to `PYTHONPATH` when running the scripts (Hydra's launcher keeps the working directory but explicit export avoids surprises).
+  ```bash
+  export PYTHONPATH=$PWD:$PYTHONPATH
+  ```
 
-Please install `common_utils` package in https://github.com/yuandong-tian/tools2 before running the code. 
-
-# Sample Usage 
-
-## Double Deep Network (DDN) [1]
-To run verification of Theorem 4 in [1]:
-
+## Dataset Storage
+Most BYOL/SimCLR experiments reuse the `config/byol_config.yaml` default dataset root. Set it once to prevent re-downloading datasets:
+```yaml
+dataset_path: /abs/path/to/datasets
 ```
+Hydra overrides still work, e.g. `dataset=cifar10` on the command line.
+
+## Running Experiments
+
+### Double Deep Network (DDN) — [1]
+Verifies Theorem 4 with the InfoNCE exact covariance objective:
+```bash
 python main.py method=simclr use_optimizer=adam optimizer.params.weight_decay=0 seed=1 \
   optimizer.params.lr=1e-3 trainer.nce_loss.exact_cov=true \
   dataset=stl10 trainer.nce_loss.beta=0 trainer.max_epochs=500
 ```
+Switch `trainer.nce_loss.exact_cov=false` to obtain the standard NCE loss behaviour. Use non-zero `trainer.nce_loss.beta` for generalized losses (positive or negative as in the paper). For hierarchical latent tree model experiments referenced in Section 6 of [1], use the dedicated code at <https://github.com/facebookresearch/luckmatters/tree/master/ssl/hltm>.
 
-You can also set `trainer.nce_loss.exact_cov=false` to get performance when using normal NCE loss. Set `trainer.nce_loss.beta` to be nonzero for more general loss functions, when `beta` can be either positive or negative.  
-
-For Hierarchical Latent Tree Model (HLTM) in Section 6, please check the code [here](https://github.com/facebookresearch/luckmatters/tree/master/ssl/hltm).
-
-## DirectPred [2]
-To run DirectPred introduced in [2], here is a sample command (tested in commit cb23d10c3018df6bf275ad537f23675c8a627253) 
-
-```
+### DirectPred — [2]
+Linear predictor variant of BYOL with DirectPredict regularization (validated on commit `cb23d10c3018df6bf275ad537f23675c8a627253`):
+```bash
 python main.py seed=1 method=byol trainer.max_epochs=100 trainer.predictor_params.has_bias=false \
   trainer.predictor_params.normalization=no_normalization network.predictor_head.mlp_hidden_size=null \
   trainer.predictor_reg=corr trainer.predictor_freq=1 trainer.dyn_lambda=0.3 trainer.dyn_eps=0.01 trainer.balance_type=boost_scale
 ```
-Note that 
-1. The second line `trainer.predictor_params.normalization=no_normalization` and `network.predictor_head.mlp_hidden_size=null` means that the predictor is linear.  
-2. The third line means that we use DirectPredict with update frequency `freq=1`, `dyn_lambda=0.3` (which is `rho` in Eqn. 19 of [2]) and `dyn_eps=0.01` (which is `eps` in Eqn. 18 of [2]).  
+Here `normalization=no_normalization` and `mlp_hidden_size=null` produce a linear predictor. The DirectPredict hyperparameters map to `freq=1`, `rho=0.3` (as `dyn_lambda`) and `eps=0.01` in Eqns. 18–19 of [2].
 
-## alpha-CL [3] 
-To run alpha-CL (with `p=4` in the paper), here is a sample command
-```
-python main.py method=simclr dataset=cifar100 trainer.nce_loss.loss_type=dual2 trainer.nce_loss.alpha_exponent=2 trainer.nce_loss.alpha_eps=0 trainer.nce_loss.alpha_type=exp use_optimizer=adam optimizer.params.lr=0.01 optimizer.params.weight_decay=0 seed=1
-```
-
-## alpha-CL with nonlinearity [4]
-To run the experiments in Section 5, try the following. Here `distri.num_tokens_per_pos` is `P`, and `distri.pattern_cnt` is `G` in the paper. 
-
-```
-python bn_gen.py distri.num_tokens=20 distri.num_tokens_per_pos=5 model.activation=relu beta=5 model.bn_spec.use_bn=true model.bn_spec.backprop_var=false seed=1 model.shared_low_layer=false opt.wd=0.005 distri.pattern_cnt=40 model.output_d=50 opt.lr=0.02
+### α-CL — [3]
+Runs the dual-2 formulation with α-exponent 2 (`p=4` in the paper):
+```bash
+python main.py method=simclr dataset=cifar100 trainer.nce_loss.loss_type=dual2 \
+  trainer.nce_loss.alpha_exponent=2 trainer.nce_loss.alpha_eps=0 \
+  trainer.nce_loss.alpha_type=exp use_optimizer=adam optimizer.params.lr=0.01 \
+  optimizer.params.weight_decay=0 seed=1
 ```
 
-Output
+### α-CL with Nonlinearity — [4]
+Section 5 experiments are reproduced via the BN generation script (`distri.num_tokens_per_pos` is \(P\) and `distri.pattern_cnt` is \(G\) in the paper):
+```bash
+python bn_gen.py distri.num_tokens=20 distri.num_tokens_per_pos=5 model.activation=relu beta=5 \
+  model.bn_spec.use_bn=true model.bn_spec.backprop_var=false seed=1 model.shared_low_layer=false \
+  opt.wd=0.005 distri.pattern_cnt=40 model.output_d=50 opt.lr=0.02
 ```
-[2022-09-02 15:56:05,981][bn_gen.py][INFO] - distributions: #Tokens: 20, #Loc: 10, Tokens per loc: [5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
-patterns:
-  -F-H--C-MO
-  -JFL--EN--
-  -J-HI---ID
-  L-H---C-PJ
-  -JOL-TI---
-  -RFC-PE---
-  FG-L-K--M-
-  JNF-M----O
-  --LC-KL-F-
-  L-HJK----O
-  -N-L-E-IM-
-  TN--HN-I--
-  RR----ID-O
-  --L-HEI--J
-  L--CIK--I-
-  --FJMT---T
-  -R--MNE--T
-  TRO--PC---
-  J-HC----FT
-  -GO---CQI-
-  -N--KNL-R-
-  ----N-IQRD
-  J--JNN---J
-  R--H-T-O-J
-  --H-KP--ID
-  -FE-H--DI-
-  ---H-PLQR-
-  FN-HI----D
-  JJ--H--I-P
-  R-HC----RP
-  FJ--I---RT
-  T--JK-C-R-
-  LGHJ----R-
-  L-L--N--PP
-  R--CM--D-P
-  -FE-N---MT
-  J--HI--QM-
-  RN--K---RJ
-  -NF-KE---O
-  -FOM-KI---
-At loc 0: L=5,F=3,J=5,T=3,R=5
-At loc 1: F=4,J=5,R=4,G=3,N=7
-At loc 2: F=5,H=6,O=4,L=3,E=2
-At loc 3: H=6,L=4,C=6,J=5,M=1
-At loc 4: I=5,M=4,K=6,H=4,N=3
-At loc 5: T=3,P=4,K=4,E=3,N=5
-At loc 6: C=5,E=3,I=5,L=3
-At loc 7: N=1,I=3,D=3,Q=4,O=1
-At loc 8: M=5,I=5,P=2,F=2,R=8
-At loc 9: O=5,D=4,J=5,T=5,P=4
+The command logs intermediate checkpoints (`model-{iter}.pth`) and statistics such as token distributions.
 
-[2022-09-02 15:56:05,984][/private/home/yuandong/luckmatters/ssl/real-dataset/bn_gen_utils.py][INFO] - mags: tensor([1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-        1., 1.])
-[2022-09-02 15:56:05,984][bn_gen.py][INFO] - beta overrides multi: multi [25] = tokens_per_loc [5] x beta [5]
-[2022-09-02 15:56:06,028][bn_gen.py][INFO] - [0] 2.595567226409912
-[2022-09-02 15:56:06,029][bn_gen.py][INFO] - Save to model-0.pth
-[2022-09-02 15:56:24,516][bn_gen.py][INFO] - [500] 1.5258710384368896
-[2022-09-02 15:56:24,517][bn_gen.py][INFO] - Save to model-500.pth
-[2022-09-02 15:56:42,832][bn_gen.py][INFO] - [1000] 1.5300947427749634
-[2022-09-02 15:56:42,833][bn_gen.py][INFO] - Save to model-1000.pth
-[2022-09-02 15:57:01,072][bn_gen.py][INFO] - [1500] 1.5061111450195312
-[2022-09-02 15:57:01,072][bn_gen.py][INFO] - Save to model-1500.pth
-[2022-09-02 15:57:19,371][bn_gen.py][INFO] - [2000] 1.4396307468414307
-[2022-09-02 15:57:19,371][bn_gen.py][INFO] - Save to model-2000.pth
-[2022-09-02 15:57:37,563][bn_gen.py][INFO] - [2500] 1.5044890642166138
-[2022-09-02 15:57:37,564][bn_gen.py][INFO] - Save to model-2500.pth
-[2022-09-02 15:57:55,655][bn_gen.py][INFO] - [3000] 1.4585031270980835
-[2022-09-02 15:57:55,655][bn_gen.py][INFO] - Save to model-3000.pth
-[2022-09-02 15:58:16,503][bn_gen.py][INFO] - [3500] 1.472838282585144
-[2022-09-02 15:58:16,504][bn_gen.py][INFO] - Save to model-3500.pth
-[2022-09-02 15:58:34,750][bn_gen.py][INFO] - [4000] 1.421286940574646
-[2022-09-02 15:58:34,751][bn_gen.py][INFO] - Save to model-4000.pth
-[2022-09-02 15:58:52,998][bn_gen.py][INFO] - [4500] 1.341599464416504
-[2022-09-02 15:58:52,999][bn_gen.py][INFO] - Save to model-4500.pth
-[2022-09-02 15:59:11,008][bn_gen.py][INFO] - Final loss = 1.5294005870819092
-[2022-09-02 15:59:11,009][bn_gen.py][INFO] - Save to model-final.pth
-[2022-09-02 15:59:11,052][bn_gen.py][INFO] - [{'folder': '/private/home/yuandong/luckmatters/ssl/real-dataset/outputs/2022-09-02/15-56-05', 'loc0': 0.9961947202682495, 'loc_other0': 0.005383226554840803, 'loc1': 0.9986963272094727, 'loc_other1': -0.00016310946375597268, 'loc2': 0.9985083341598511, 'loc_other2': -0.0002446844591759145, 'loc3': 0.9983118772506714, 'loc_other3': -0.0002287515817442909, 'loc4': 0.9983332753181458, 'loc_other4': -0.0002713123394642025, 'loc5': 0.9984112977981567, 'loc_other5': -0.00028966396348550916, 'loc6': 0.9983190298080444, 'loc_other6': -0.0002980256685987115, 'loc7': 0.9980360269546509, 'loc_other7': -0.00040157922194339335, 'loc8': 0.9986146092414856, 'loc_other8': -0.00030036718817427754, 'loc9': 0.9987049102783203, 'loc_other9': 0.023116284981369972, 'loc_all': 0.9982131123542786, 'loc_other_all': 0.002630201866850257}]
+### Scan & Snap — [5]
+Training command (produces the logs used for Fig. 4):
+```bash
+python decoder_only.py d=128 L=128 H=1 niter=100 save_per_minibatch=2 opt.wd=0 \
+  batchsize=128 seed=2 model2.normalize=true opt.method=sgd model2.residual=false \
+  dataset2.num_last=2 dataset2.num_next_per_last=1 dataset2.num_common_per_last=0 \
+  opt.lr_z=1 opt.lr_y_multi_on_z=1
 ```
+The console output mirrors `scan_snap/figure_4.log` and ends with the path to the saved run directory. Use the helper scripts to generate figures:
+- `python scan_snap/figure_4_create.py [RUN_DIR]`
+- `python scan_snap/figure_6_create.py` (loads saved sweep statistics; metadata and hyperparameters are logged in `scan_snap/figure_6.log`)
+- `scan_snap/figure_7.ipynb` for Fig. 7 (use Jupyter or VS Code).
 
-## Scan & Snap [5]
-To create Fig. 4, run the following command
+### JoMA — [6]
+- Figs. 2 & 3: `python joma/draw_figure_2_3.py` (`use_gaussian_prob=True/False` toggles the two subplots).
+- Fig. 4: `python joma/draw_figure_4.py`.
+- Transformer training for Fig. 6 (attention entropy returning behaviour):
+  ```bash
+  python decoder_wiki.py opt.lr=1e-4 nlayers=5 num_epoch=20 seed=1 dataset=wikitext2 use_baseline=true
+  ```
+  Sweep parameters and commit hashes are documented in `joma/wikitext2_exp.log` and `joma/wikitext103_exp.log`. Visualise with `python joma/draw_figure_6.py`.
+- Fig. 8: `python joma/draw_figure_8.py` (low-learning-rate sweep settings recorded in `joma/wikitext2_exp_lr_small.log`).
+- Table 1 correlation study with synthetic hierarchical data:
+  ```bash
+  python decoder_only_hier.py opt.method=adam niter=10000 save_per_minibatch=5000 opt.lr=1e-5 \
+    opt.wd=1e-4 seed=1 num_class=20 M=100 L=30 model.nlayer=3 \
+    gen.num_tokens=[10,20,null] gen.num_combinations=[2,2,2] model.d=1024 \
+    +model.hidden_multi_type=M +model.hidden_multi=4
+  ```
 
-```
-python decoder_only.py d=128 L=128 H=1 niter=100 save_per_minibatch=2 opt.wd=0 batchsize=128 seed=2 model2.normalize=true opt.method=sgd model2.residual=false dataset2.num_last=2 dataset2.num_next_per_last=1 dataset2.num_common_per_last=0 opt.lr_z=1 opt.lr_y_multi_on_z=1
-```
-which will run the training. The log looks like the following (see `scan_snap/figure_4.log`) 
-```
-[2024-04-06 03:17:04,531][decoder_only.py][INFO] - Generated 2 facts:
-...
-[2024-04-06 03:17:05,789][decoder_only.py][INFO] - lr y = 1, lr z = 1
-[2024-04-06 03:17:06,124][decoder_only.py][INFO] - [0] loss: 3.526359796524048
-...
-[2024-04-06 03:17:06,941][decoder_only.py][INFO] - [98] loss: 2.2223721316549927e-05
-[2024-04-06 03:17:06,952][decoder_only.py][INFO] - [Your final result path] 
-```
+### CoGo — [7] and Li2 — [8]
+- Single-run experiment (Fig. 3 example):
+  ```bash
+  python modular_addition_simple2.py activation=sqr loss_func=mse num_epochs=10000 weight_decay=5e-5 \
+    hidden_size=512 learning_rate=0.002 M=71 test_size=0.1 save_interval=100 seed=1
+  ```
+- Sweep covering Figs. 4–5 and Table 2:
+  ```bash
+  python modular_addition_simple2.py -m activation=sqr loss_func=mse num_epochs=10000 \
+    weight_decay=1e-5,5e-5,1e-4 hidden_size=256,512,1024,2048 learning_rate=0.002 \
+    M=23,71,127 test_size=0.1 save_interval=100 seed=1,2,3,4,5
+  ```
+  Analyse results with:
+  - `python cogo/draw_dyn_fig3.py [EXP_DIR]`
+  - `python cogo/sol_distri.py [SWEEP_DIR]`
+  - `python cogo/factorize_sol.py [SWEEP_DIR]`
+  Corresponding logs (with hyperparameters and commit IDs) are stored in `cogo/modular_addition_simple2_fig3.log` and `cogo/sweep.log`.
 
-Then run `scan_snap/figure_4_create.py [your final result path]` and you will get Fig. 4. Fig. 5 is similar with Adam as the optimizer.  
-
-To create Fig. 6, run following command `scan_snap/figure_6_generate.py`, which will load the saved statistics from parameter sweeps. To check the hyperparameters and codebase used to run the sweep, check `scan_snap/figure_6.log` which contains the arguments and git commit number. 
-
-For Fig. 7, please check `scan_snap/figure_7.ipynb`.
-
-## JoMA [6]
-To draw Fig. 2 and Fig. 3, please run `joma/draw_figure_2_3.py`. Change `use_gaussian_prob` to be `True` or `False` to draw the two subfigures.  
-
-To draw Fig. 4, please run `joma/draw_figure_4.py`.
-
-To train a model and show that the attention entropy goes down then up (Fig. 6 in the paper) 
-```
-python decoder_wiki.py opt.lr=1e-4 nlayers=5 num_epoch=20 seed=1 dataset=wikitext2 use_baseline=true
-```
-Note that `use_baseline=true` corresponds to Vanilla Transformer. Use `joma/draw_figure_6.py` and you can reproduce Fig. 6 for wikitext2, by loading the saved results from sweep runs. The sweep run parameters (and commit hex) are stored in `joma/wikitext2_exp.log` and `joma/wikitext103_exp.log`.  
-
-To reproduce Fig. 8, you can run `joma/draw_figure_8.py`. The sweep run parameters for smaller learning rate is in `joma/wikitext2_exp_lr_small.log`. 
-
-To train a model on synthetic data generated by a hierarchical model, and verify the correlation between the latents and the neuron activations (Table 1 in the paper), please use:
-```
-python decoder_only_hier.py opt.method=adam niter=10000 save_per_minibatch=5000 opt.lr=1e-5 opt.wd=0.0001 seed=1 num_class=20 M=100 L=30 model.nlayer=3 gen.num_tokens=[10,20,null] gen.num_combinations=[2,2,2] model.d=1024 +model.hidden_multi_type=M +model.hidden_multi=4
-```
-
-## CoGo [7]
-To run one experiments, run the following command: 
-
-```
-python modular_addition_simple2.py activation=sqr loss_func=mse num_epochs=10000 weight_decay=5e-5 hidden_size=512 learning_rate=0.002 M=71 test_size=0.1 save_interval=100 seed=1
-```
-
-You can also do a sweeping with the following command:
-```
-python modular_addition_simple2.py -m activation=sqr loss_func=mse num_epochs=10000 weight_decay=1e-5,5e-5,1e-4 hidden_size=256,512,1024,2048 learning_rate=0.002 M=23,71,127 test_size=0.1 save_interval=100 seed=1,2,3,4,5
-```
-
-For the specific experiment of Fig. 3 and Fig. 4/Tbl. 2/Fig. 5, we have provided logs to fully reproduce the experiments. For Fig. 3, please check [here](cogo/modular_addition_simple2_fig3.log). For Fig. 4/Tbl. 2/Fig. 5, please check [here](./cogo/sweep.log). 
-
-Given the resulting folder, you could run the following scripts to load and visualize the results.
-+ Use `python draw_dyn_fig3.py [exp_folder]` to draw Fig. 3 for one specific experiment. To reproduce the experiment, the log for that specific figure (hyperparameters are included) is [here](cogo/sweep.log). 
-+ Use `python sol_distri.py [exp_sweep_folder]` to draw Fig. 4. 
-+ Use `python factorize_sol.py [exp_sweep_folder]` to draw Tbl. 2 and Fig. 5.
-
-
-# Reference
-[1] **Understanding Self-supervised Learning with Dual Deep Networks** 
-
-Yuandong Tian, Lantao Yu, Xinlei Chen, Surya Ganguli
-
-[arXiv](https://arxiv.org/abs/2010.00578)  
-
-[2] **Understanding Understanding self-supervised Learning Dynamics without Contrastive Pairs** 
-
-Yuandong Tian, Xinlei Chen, Surya Ganguli
-
-[ICML'21](https://arxiv.org/abs/2102.06810) *Outstanding paper honorable mention* 
-
-[3] **Understanding Deep Contrastive Learning via Coordinate-wise Optimization**
-
-Yuandong Tian
-
-[NeurIPS'22](https://arxiv.org/abs/2201.12680) Oral
-
-[4] **Understanding the Role of Nonlinearity in Training Dynamics of Contrastive Learning**
-
-Yuandong Tian
-
-[ICLR'23](https://arxiv.org/abs/2206.01342)
-
-[5] **Scan and Snap: Understanding Training Dynamics and Token Composition in 1-layer Transformer**
-
-Yuandong Tian, Yiping Wang, Beidi Chen, Simon Du
-
-[NeurIPS'23](https://arxiv.org/abs/2305.16380)
-
-[6] **JoMA: Demystifying Multilayer Transformers via JOint Dynamics of MLP and Attention**
-
-Yuandong Tian, Yiping Wang, Zhenyu Zhang, Beidi Chen, Simon Du
-
-[ICLR'24](https://arxiv.org/abs/2310.00535)
-
-
-[7] **Composing Global Solutions to Reasoning Tasks via Algebraic Objects in Neural Nets**
-
-Yuandong Tian
-
-[NeurIPS'25](https://arxiv.org/abs/2410.01779)
-
-
+## References
+1. **Understanding Self-supervised Learning with Dual Deep Networks** — Yuandong Tian, Lantao Yu, Xinlei Chen, Surya Ganguli. [arXiv:2010.00578](https://arxiv.org/abs/2010.00578)
+2. **Understanding Self-supervised Learning Dynamics without Contrastive Pairs** — Yuandong Tian, Xinlei Chen, Surya Ganguli. [ICML 2021, Outstanding Paper Honorable Mention](https://arxiv.org/abs/2102.06810)
+3. **Understanding Deep Contrastive Learning via Coordinate-wise Optimization** — Yuandong Tian. [NeurIPS 2022 Oral](https://arxiv.org/abs/2201.12680)
+4. **Understanding the Role of Nonlinearity in Training Dynamics of Contrastive Learning** — Yuandong Tian. [ICLR 2023](https://arxiv.org/abs/2206.01342)
+5. **Scan and Snap: Understanding Training Dynamics and Token Composition in 1-layer Transformer** — Yuandong Tian, Yiping Wang, Beidi Chen, Simon Du. [NeurIPS 2023](https://arxiv.org/abs/2305.16380)
+6. **JoMA: Demystifying Multilayer Transformers via Joint Dynamics of MLP and Attention** — Yuandong Tian, Yiping Wang, Zhenyu Zhang, Beidi Chen, Simon Du. [ICLR 2024](https://arxiv.org/abs/2310.00535)
+7. **Composing Global Solutions to Reasoning Tasks via Algebraic Objects in Neural Nets** — Yuandong Tian. [NeurIPS 2025](https://arxiv.org/abs/2410.01779)
+8. **Provable Scaling Laws of Feature Emergence from Learning Dynamics of Grokking** - Yuandong Tian. [arXiv:2509.21519](https://arxiv.org/abs/2509.21519)
