@@ -71,7 +71,7 @@ python bn_gen.py distri.num_tokens=20 distri.num_tokens_per_pos=5 model.activati
   model.bn_spec.use_bn=true model.bn_spec.backprop_var=false seed=1 model.shared_low_layer=false \
   opt.wd=0.005 distri.pattern_cnt=40 model.output_d=50 opt.lr=0.02
 ```
-The command logs intermediate checkpoints (`model-{iter}.pth`) and statistics such as token distributions.
+The command logs intermediate checkpoints (`model-{iter}.pth`) and statistics such as token distributions. An example log can be found [here](./alpha_cl_nonlinearity.log).
 
 ### Scan & Snap — [5]
 Training command (produces the logs used for Fig. 4):
