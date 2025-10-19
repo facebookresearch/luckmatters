@@ -40,6 +40,11 @@ critical_ratio_delta: 0
 critical_ratio_multiplier: 2.7482
 
 other_layers: 0
+# can be modular_addition, or sym, or collection, or expression 
 group_type: "modular_addition"
+
+expression: null
+
+embed_trainable: false
 
 group_collection_max_dk: 0

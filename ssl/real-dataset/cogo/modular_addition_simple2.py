@@ -115,6 +115,15 @@ def load_non_abelian_collection(M, dk_max=2):
 
     return triples, int(rec["order"])
 
+def load_expression(M, expr):
+    data = []
+    for x in range(M):
+        for y in range(M):
+            z = eval(expr, {}, dict(x=x,y=y)) % M
+            # put them to the dataset
+            data.append((x, y, z))
+    return data, M
+
 nll_criterion = nn.CrossEntropyLoss().cuda()
 
 def compute_loss(outputs, labels, loss_type):
@@ -162,11 +171,14 @@ class StatsTracker:
 
 # Define the neural network model
 class ModularAdditionNN(nn.Module):
-    def __init__(self, M, num_of_ops, hidden_size, activation="sqr", use_bn=False, inverse_mat_layer_reg=None, other_layers=0):
+    def __init__(self, M, num_of_ops, hidden_size, activation="sqr", embed_trainable=False, use_bn=False, inverse_mat_layer_reg=None, other_layers=0):
         super(ModularAdditionNN, self).__init__()
-        self.embedding = nn.Embedding(M, M).requires_grad_(False)
-        with torch.no_grad():
-            self.embedding.weight[:] = torch.eye(M, M)
+        if not embed_trainable:
+            self.embedding = nn.Embedding(M, M).requires_grad_(False)
+            with torch.no_grad():
+                self.embedding.weight[:] = torch.eye(M, M)
+        else:
+            self.embedding = nn.Embedding(M, M)
             
         self.W = nn.Linear(num_of_ops*M, hidden_size, bias=False)
         self.other_layers = nn.ModuleList([ nn.Linear(hidden_size, hidden_size, bias=False) for _ in range(other_layers) ])
@@ -293,17 +305,21 @@ def main(args):
     common_utils.set_all_seeds(args.seed)
     # torch.manual_seed(args.seed)
 
+    scaling_law_correction = 1
+
     # Generate dataset
     if args.group_type == "modular_addition":
         dataset, group_order = generate_modular_addition_dataset(args.M, args.num_of_ops)
-        scaling_law_correction = 1
     elif args.group_type == "sym":
         dataset, group_order = generate_perm_dataset(args.M)
-        scaling_law_correction = 1
     elif args.group_type == "collection":
         # In this case, M becomes a index. 
         dataset, group_order = load_non_abelian_collection(args.M, dk_max=args.group_collection_max_dk)
         scaling_law_correction = args.group_collection_max_dk / 2 
+    elif args.group_type == "expression":
+        # This is not necessarily a group
+        # in this case, args.M is treated as a number and we use expression to compute the output
+        dataset, group_order = load_expression(int(args.M), args.expression)
     else:
         raise RuntimeError(f"Unknown group type = {args.group_type}")
 
@@ -357,6 +373,7 @@ def main(args):
         assert args.loss_func == "mse", "only MSE loss can use set_weight_reg != None" 
 
     model = ModularAdditionNN(group_order, args.num_of_ops, args.hidden_size, 
+                              embed_trainable=args.embed_trainable,
                               activation=args.activation, 
                               use_bn=args.use_bn, 
                               inverse_mat_layer_reg=args.set_weight_reg, 
@@ -393,7 +410,7 @@ def main(args):
     results = []
 
     # Get a one hot y_train
-    Y_train = F.one_hot(y_train.squeeze())
+    Y_train = F.one_hot(y_train.squeeze(), num_classes=group_order)
     Y_train = Y_train - 1.0 / group_order
 
     stats_tracker = StatsTracker()
